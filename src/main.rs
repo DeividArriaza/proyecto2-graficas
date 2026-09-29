@@ -144,7 +144,7 @@ fn mat(k: Kind) -> Material {
     match k {
         Kind::Grass => Material::new(
             k,
-            V::new(0.15, 0.48, 0.12),
+            V::new(0.12, 0.62, 0.10),
             0.12,
             0.02,
             0.,
@@ -153,7 +153,7 @@ fn mat(k: Kind) -> Material {
         ),
         Kind::Brick => Material::new(
             k,
-            V::new(0.62, 0.12, 0.06),
+            V::new(0.82, 0.07, 0.03),
             0.18,
             0.04,
             0.,
@@ -169,7 +169,7 @@ fn mat(k: Kind) -> Material {
             1.,
             V::default(),
         ),
-        Kind::Metal => Material::new(k, V::new(0.72, 0.76, 0.82), 0.9, 0.72, 0., 1., V::default()),
+        Kind::Metal => Material::new(k, V::new(0.78, 0.82, 0.9), 0.7, 0.34, 0., 1., V::default()),
         Kind::Water => Material::new(
             k,
             V::new(0.08, 0.35, 0.52),
@@ -188,7 +188,7 @@ fn mat(k: Kind) -> Material {
             1.,
             V::new(1.4, 0.42, 0.03),
         ),
-        Kind::Stone => Material::new(k, V::new(0.32, 0.35, 0.4), 0.15, 0.08, 0., 1., V::default()),
+        Kind::Stone => Material::new(k, V::new(0.48, 0.52, 0.6), 0.18, 0.05, 0., 1., V::default()),
     }
 }
 
@@ -196,6 +196,12 @@ fn mat(k: Kind) -> Material {
 struct Cube {
     min: V,
     max: V,
+    material: Material,
+}
+#[derive(Clone, Copy)]
+struct Sphere {
+    center: V,
+    radius: f32,
     material: Material,
 }
 struct Hit {
@@ -276,6 +282,29 @@ fn hit_cube(c: Cube, r: Ray) -> Option<Hit> {
         v,
     })
 }
+fn hit_sphere(s: Sphere, r: Ray) -> Option<Hit> {
+    let oc = r.o - s.center;
+    let b = oc.dot(r.d);
+    let c = oc.dot(oc) - s.radius * s.radius;
+    let d = b * b - c;
+    if d < 0. {
+        return None;
+    }
+    let root = d.sqrt();
+    let t = [-b - root, -b + root].into_iter().find(|t| *t > EPS)?;
+    let point = r.o + r.d * t;
+    let normal = (point - s.center) / s.radius;
+    let u = 0.5 + normal.z.atan2(normal.x) / (2. * std::f32::consts::PI);
+    let v = 0.5 - normal.y.asin() / std::f32::consts::PI;
+    Some(Hit {
+        t,
+        point,
+        normal,
+        material: s.material,
+        u,
+        v,
+    })
+}
 fn ry(v: V, a: f32) -> V {
     let (s, c) = a.sin_cos();
     V::new(c * v.x + s * v.z, v.y, -s * v.x + c * v.z)
@@ -322,6 +351,7 @@ fn texture(m: Material, u: f32, v: f32) -> V {
 struct Scene {
     name: &'static str,
     cubes: Vec<Cube>,
+    spheres: Vec<Sphere>,
     lights: Vec<(V, V)>,
     yaw: f32,
     sky: u8,
@@ -334,186 +364,178 @@ fn cube(out: &mut Vec<Cube>, center: V, size: V, k: Kind) {
         material: mat(k),
     });
 }
+fn sphere(out: &mut Vec<Sphere>, center: V, radius: f32, k: Kind) {
+    out.push(Sphere {
+        center,
+        radius,
+        material: mat(k),
+    });
+}
 fn scene(id: usize) -> Scene {
     let mut c = Vec::new();
+    let mut spheres = Vec::new();
     match id % 3 {
         0 => {
             for x in -6..=6 {
                 for z in -5..=5 {
-                    cube(
-                        &mut c,
-                        V::new(x as f32 - 0.5, 0., z as f32),
-                        V::new(1., 0.5, 1.),
-                        Kind::Stone,
-                    );
+                    if x * x + z * z <= 38 {
+                        cube(
+                            &mut c,
+                            V::new(x as f32, 0., z as f32),
+                            V::new(1., 0.5, 1.),
+                            Kind::Stone,
+                        );
+                    }
                 }
             }
             cube(
                 &mut c,
-                V::new(0., 0.5, 0.),
-                V::new(12., 0.5, 10.),
+                V::new(0., 0.42, 0.),
+                V::new(8.5, 0.22, 7.5),
                 Kind::Water,
             );
-            for x in -4..=4 {
-                cube(
-                    &mut c,
-                    V::new(x as f32, 1.2, -2.),
-                    V::new(1., 1.4, 0.8),
-                    Kind::Brick,
-                );
-            }
+            // Red hat-shaped Odyssey: broad hull, white deck, mast and balloon.
             cube(
                 &mut c,
-                V::new(0., 2.4, -2.),
-                V::new(2.5, 1., 0.8),
-                Kind::Metal,
-            );
-            for x in -3..=3 {
-                cube(
-                    &mut c,
-                    V::new(x as f32, 1., 2.),
-                    V::new(0.8, 2., 0.8),
-                    Kind::Metal,
-                );
-            }
-            // Odyssey's airship silhouette: hull, cabin, mast and cap.
-            cube(
-                &mut c,
-                V::new(0., 1.3, 0.7),
-                V::new(5.5, 0.55, 2.2),
-                Kind::Metal,
-            );
-            cube(
-                &mut c,
-                V::new(0., 1.9, 0.7),
-                V::new(2.6, 1.0, 1.25),
+                V::new(0., 1.25, 0.3),
+                V::new(6.2, 0.75, 2.6),
                 Kind::Brick,
             );
             cube(
                 &mut c,
-                V::new(0., 2.75, 0.7),
-                V::new(0.35, 1.0, 0.35),
+                V::new(0., 1.7, 0.3),
+                V::new(4.7, 0.35, 2.0),
                 Kind::Metal,
             );
             cube(
                 &mut c,
-                V::new(0., 3.3, 0.7),
-                V::new(1.5, 0.22, 1.5),
+                V::new(0., 2.05, -0.05),
+                V::new(2.8, 0.65, 1.45),
                 Kind::Brick,
             );
-            for x in [-2.0, 2.0] {
-                cube(
-                    &mut c,
-                    V::new(x, 1.85, 0.7),
-                    V::new(0.45, 1.0, 0.45),
-                    Kind::Metal,
-                );
+            cube(
+                &mut c,
+                V::new(-2.5, 1.45, 0.3),
+                V::new(1.0, 0.48, 1.7),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(2.5, 1.45, 0.3),
+                V::new(1.0, 0.48, 1.7),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 3.2, -0.1),
+                V::new(0.22, 2.6, 0.22),
+                Kind::Metal,
+            );
+            cube(
+                &mut c,
+                V::new(0., 3.45, -0.32),
+                V::new(2.5, 1.5, 0.12),
+                Kind::Brick,
+            );
+            sphere(&mut spheres, V::new(0., 5.1, -0.15), 1.45, Kind::Brick);
+            sphere(&mut spheres, V::new(0., 5.1, 1.05), 0.42, Kind::Metal);
+            for x in [-1.1, 1.1] {
+                sphere(&mut spheres, V::new(x, 2.05, 1.05), 0.23, Kind::Star);
             }
         }
         1 => {
-            for x in -6..=6 {
-                for z in -5..=5 {
-                    cube(
-                        &mut c,
-                        V::new(x as f32 - 0.5, 0., z as f32),
-                        V::new(1., 0.5, 1.),
-                        Kind::Stone,
-                    );
-                }
-            }
-            for (p, s, k) in [
-                (V::new(-3., 1., 0.), V::new(2., 2., 2.), Kind::Stone),
-                (V::new(3., 1.5, -1.), V::new(3., 3., 3.), Kind::Grass),
-                (V::new(0., 2., 2.), V::new(1., 1., 1.), Kind::Star),
-            ] {
-                cube(&mut c, p, s, k);
-            }
-            for i in 0..10 {
-                let a = i as f32 * 0.628;
-                cube(
-                    &mut c,
-                    V::new(a.cos() * 4., 1.2, a.sin() * 4.),
-                    V::new(0.45, 0.45, 0.45),
-                    Kind::Star,
+            // Floating planetoid with a bright, deliberately sparse orbital ring.
+            sphere(&mut spheres, V::new(0., 1.9, 0.), 2.25, Kind::Grass);
+            sphere(&mut spheres, V::new(-0.55, 3.35, 0.55), 0.62, Kind::Stone);
+            sphere(&mut spheres, V::new(0.75, 3.45, -0.45), 0.36, Kind::Star);
+            for i in 0..18 {
+                let a = i as f32 * std::f32::consts::TAU / 18.;
+                let p = V::new(a.cos() * 4.1, 2.0 + a.sin() * 0.75, a.sin() * 2.8);
+                sphere(
+                    &mut spheres,
+                    p,
+                    if i % 3 == 0 { 0.23 } else { 0.13 },
+                    if i % 3 == 0 { Kind::Star } else { Kind::Metal },
                 );
             }
-            // A block-built planetoid and orbital star ring make the Galaxy scene read as space.
-            for i in 0..16 {
-                let a = i as f32 * std::f32::consts::FRAC_PI_8;
-                let radius = if i % 2 == 0 { 2.2 } else { 2.8 };
-                cube(
-                    &mut c,
-                    V::new(
-                        a.cos() * radius,
-                        1.0 + (i % 3) as f32 * 0.25,
-                        a.sin() * radius,
-                    ),
-                    V::new(0.6, 0.6, 0.6),
-                    if i % 3 == 0 { Kind::Star } else { Kind::Stone },
-                );
-            }
+            cube(
+                &mut c,
+                V::new(0., -0.5, 0.),
+                V::new(3.0, 0.5, 3.0),
+                Kind::Stone,
+            );
         }
         _ => {
             for x in -6..=6 {
                 for z in -5..=5 {
-                    cube(
-                        &mut c,
-                        V::new(x as f32 - 0.5, 0., z as f32),
-                        V::new(1., 0.5, 1.),
-                        Kind::Grass,
-                    );
+                    if x * x + z * z <= 42 {
+                        cube(
+                            &mut c,
+                            V::new(x as f32, 0., z as f32),
+                            V::new(1., 0.5, 1.),
+                            Kind::Grass,
+                        );
+                    }
                 }
             }
-            for x in -4..=4 {
-                for y in 0..3 {
-                    cube(
-                        &mut c,
-                        V::new(x as f32, y as f32 + 0.5, -2.),
-                        V::new(1., 1., 0.8),
-                        if y == 1 { Kind::Brick } else { Kind::Stone },
-                    );
-                }
-            }
-            for x in [-4., 4.] {
-                cube(&mut c, V::new(x, 1.5, 2.), V::new(1., 3., 1.), Kind::Pipe);
-                cube(&mut c, V::new(x, 3., 2.), V::new(2., 1., 2.), Kind::Pipe);
-            }
-            cube(&mut c, V::new(0., 1., 2.), V::new(2., 2., 1.), Kind::Brick);
-            // Castle silhouette and a central doorway for the NSMB diorama.
+            // Bright stone castle with a readable arch, towers, pipes and coin trail.
             cube(
                 &mut c,
-                V::new(0., 2.2, -2.8),
-                V::new(7., 4.4, 0.8),
+                V::new(0., 2.0, -2.7),
+                V::new(7.2, 4., 0.9),
+                Kind::Stone,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.2, -3.2),
+                V::new(1.45, 2.3, 0.2),
                 Kind::Brick,
             );
-            for x in [-3.0, 3.0] {
+            for x in [-3.1, 3.1] {
                 cube(
                     &mut c,
-                    V::new(x, 3.5, -2.8),
-                    V::new(1.6, 6.5, 1.1),
+                    V::new(x, 3.1, -2.7),
+                    V::new(1.7, 6.2, 1.2),
                     Kind::Stone,
                 );
-                for y in [6.2, 7.0] {
+                cube(
+                    &mut c,
+                    V::new(x, 6.3, -2.7),
+                    V::new(2.25, 0.5, 1.35),
+                    Kind::Brick,
+                );
+                for dx in [-0.55, 0.55] {
                     cube(
                         &mut c,
-                        V::new(x - 0.5, y, -2.8),
-                        V::new(0.45, 0.45, 1.1),
-                        Kind::Brick,
-                    );
-                    cube(
-                        &mut c,
-                        V::new(x + 0.5, y, -2.8),
-                        V::new(0.45, 0.45, 1.1),
-                        Kind::Brick,
+                        V::new(x + dx, 6.85, -2.7),
+                        V::new(0.36, 0.55, 1.2),
+                        Kind::Stone,
                     );
                 }
             }
-            cube(
-                &mut c,
-                V::new(0., 1.1, -3.25),
-                V::new(1.5, 2.2, 0.3),
-                Kind::Pipe,
-            );
+            for x in [-3.8, 3.8] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.25, 1.6),
+                    V::new(1.0, 2.5, 1.0),
+                    Kind::Pipe,
+                );
+                cube(
+                    &mut c,
+                    V::new(x, 2.65, 1.6),
+                    V::new(1.65, 0.35, 1.65),
+                    Kind::Pipe,
+                );
+            }
+            for x in [-2.0, 0.0, 2.0] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.5, 0.25),
+                    V::new(1., 1., 1.),
+                    Kind::Brick,
+                );
+                sphere(&mut spheres, V::new(x, 3.0, 0.2), 0.3, Kind::Star);
+            }
         }
     }
     let name = match id % 3 {
@@ -522,16 +544,26 @@ fn scene(id: usize) -> Scene {
         _ => "NSMB Wii",
     };
     let lights = match id % 3 {
-        0 => vec![(V::new(-4., 7., -4.), V::new(1., 0.78, 0.55))],
-        1 => vec![
-            (V::new(0., 7., 0.), V::new(0.7, 0.8, 1.)),
-            (V::new(-4., 3., 3.), V::new(1., 0.3, 0.1)),
+        0 => vec![
+            (V::new(-5., 8., 4.), V::new(1.0, 0.78, 0.58)),
+            (V::new(5., 4., 2.), V::new(0.42, 0.55, 1.0)),
+            (V::new(0., 7., -4.), V::new(0.7, 0.2, 0.12)),
         ],
-        _ => vec![(V::new(-3., 7., -4.), V::new(1., 0.9, 0.65))],
+        1 => vec![
+            (V::new(-4., 7., 5.), V::new(0.75, 0.85, 1.)),
+            (V::new(4., 5., 1.), V::new(1., 0.45, 0.16)),
+            (V::new(0., 8., -4.), V::new(0.35, 0.45, 1.)),
+        ],
+        _ => vec![
+            (V::new(-5., 8., 4.), V::new(1., 0.92, 0.72)),
+            (V::new(5., 5., 2.), V::new(0.42, 0.6, 1.)),
+            (V::new(0., 7., -5.), V::new(0.65, 0.25, 0.16)),
+        ],
     };
     Scene {
         name,
         cubes: c,
+        spheres,
         lights,
         yaw: 0.,
         sky: (id % 3) as u8,
@@ -567,18 +599,40 @@ impl Camera {
         }
     }
 }
+fn default_camera(id: usize) -> Camera {
+    match id % 3 {
+        0 => Camera {
+            target: V::new(0., 2.35, 0.),
+            distance: 14.5,
+            az: 0.72,
+            el: 0.38,
+        },
+        1 => Camera {
+            target: V::new(0., 2.0, 0.),
+            distance: 13.0,
+            az: 0.72,
+            el: 0.34,
+        },
+        _ => Camera {
+            target: V::new(0., 2.6, -1.2),
+            distance: 14.0,
+            az: 0.68,
+            el: 0.32,
+        },
+    }
+}
 fn sky(dir: V, id: u8) -> V {
     if id == 1 {
         let t = (dir.y + 1.) * 0.5;
         let base = V::new(0.015, 0.02, 0.08).lerp(V::new(0.03, 0.08, 0.28), t);
         let s = ((dir.x * 91. + dir.z * 47.).sin() * 43758.5).fract().abs();
-        base + V::new(1., 0.8, 0.45) * (if s > 0.985 { 0.9 } else { 0. })
+        base + V::new(1., 0.85, 0.62) * (if s > 0.997 { 0.85 } else { 0. })
     } else if id == 2 {
         let t = (dir.y + 1.) * 0.5;
         V::new(0.25, 0.55, 0.95).lerp(V::new(0.75, 0.9, 1.), t)
     } else {
         let t = (dir.y + 1.) * 0.5;
-        V::new(0.12, 0.08, 0.18).lerp(V::new(1., 0.32, 0.12), t)
+        V::new(0.04, 0.1, 0.22).lerp(V::new(0.92, 0.38, 0.12), t)
     }
 }
 fn schlick(cosi: f32, etai: f32, etat: f32) -> f32 {
@@ -606,6 +660,15 @@ fn nearest(scene: &Scene, r: Ray) -> Option<Hit> {
             }
         }
     }
+    for &s in &scene.spheres {
+        if let Some(mut h) = hit_sphere(s, local) {
+            if best.as_ref().is_none_or(|b: &Hit| h.t < b.t) {
+                h.point = ry(h.point, scene.yaw);
+                h.normal = ry(h.normal, scene.yaw);
+                best = Some(h);
+            }
+        }
+    }
     best
 }
 fn visible(scene: &Scene, p: V, l: V) -> bool {
@@ -623,8 +686,9 @@ fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
     let Some(h) = nearest(scene, r) else {
         return sky(r.d, scene.sky);
     };
-    let mut out = h.material.emission;
     let base = texture(h.material, h.u, h.v);
+    // Low ambient prevents physically shadowed detail from collapsing to black.
+    let mut out = h.material.emission + base * 0.16;
     for &(lp, lc) in &scene.lights {
         let to = (lp - h.point).norm();
         if visible(scene, h.point, lp) {
@@ -857,12 +921,7 @@ fn main() -> io::Result<()> {
         }
         i += 1;
     }
-    let mut cam = Camera {
-        target: V::new(0., 1., 0.),
-        distance: 12.,
-        az: 0.,
-        el: 0.22,
-    };
+    let mut cam = default_camera(id);
     let mut s = scene(id);
     if do_benchmark {
         return benchmark(&s, &cam, w, h);
@@ -926,6 +985,7 @@ fn main() -> io::Result<()> {
             let next = scene(id);
             transition_window(&old, &next, &cam, w, h, &mut buffer, &mut window)?;
             s = next;
+            cam = default_camera(id);
             dirty = false;
         }
         if dirty {
@@ -958,6 +1018,24 @@ mod tests {
         .unwrap();
         assert!((h.t - 2.).abs() < 0.001);
         assert_eq!(h.normal, V::new(0., 0., -1.));
+    }
+    #[test]
+    fn sphere_has_correct_near_hit_and_normal() {
+        let sphere = Sphere {
+            center: V::default(),
+            radius: 1.,
+            material: mat(Kind::Stone),
+        };
+        let hit = hit_sphere(
+            sphere,
+            Ray {
+                o: V::new(0., 0., -3.),
+                d: V::new(0., 0., 1.),
+            },
+        )
+        .unwrap();
+        assert!((hit.t - 2.).abs() < EPS);
+        assert_eq!(hit.normal, V::new(0., 0., -1.));
     }
     #[test]
     fn all_scenes_have_geometry() {
@@ -1020,6 +1098,7 @@ mod tests {
         let scene = Scene {
             name: "test",
             cubes: vec![blocker],
+            spheres: vec![],
             lights: vec![(V::new(0., 0., 5.), V::new(1., 1., 1.))],
             yaw: 0.,
             sky: 0,

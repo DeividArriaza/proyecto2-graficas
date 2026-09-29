@@ -81,3 +81,14 @@ test -s "$tmpdir/smoke.ppm"
 ```
 
 Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son generados automáticamente por `cargo run`.
+
+## Estado visual y límites
+
+La segunda revisión visual usa cámaras 3/4 específicas, iluminación key/fill/rim,
+ambiente mínimo, esferas raytraceadas y composiciones nuevas: Odyssey tiene casco rojo,
+cubierta y globo; Galaxy un planetoide y órbita; NSMB Wii castillo, tuberías, bloques y
+monedas. Los PNG medidos y sus métricas están en `artifacts/review-v2/`.
+
+La estética sigue siendo estilizada y procedural: no hay modelos ni texturas pintadas a
+mano, bloom, antialiasing, ni assets de personajes. Es una mejora de legibilidad y
+composición, no una reproducción exacta de los juegos.
