@@ -26,7 +26,7 @@ El resultado es un archivo PPM (`P3`), formato sin dependencias que se abre con 
 
 ## Video de demostración
 
-La consigna solicita enlazar un video en el README. Se generó localmente un GIF reproducible de la transición Odyssey → Galaxy en [artifacts/proyecto2-demo.gif](artifacts/proyecto2-demo.gif); no está publicado ni sustituye la presentación humana. No se inventa ningún enlace externo. Los renders y el reporte automatizado están en `artifacts/` (`final/`, `angles/`, `transitions/` y `render-verification.json`).
+La consigna solicita enlazar un video en el README. Se generó localmente un GIF reproducible de la transición Odyssey → Galaxy en [artifacts/proyecto2-demo.gif](artifacts/proyecto2-demo.gif); no está publicado ni sustituye la presentación humana. No se inventa ningún enlace externo. El commit incluye las capturas PNG finales, el GIF y `render-verification.json`; los PPM de `final/`, `angles/` y `transitions/` son renders locales reproducibles e intencionalmente ignorados por su volumen.
 
 Para regenerar el GIF después de ejecutar una transición con `--interactive`, usando Pillow disponible en el entorno:
 
