@@ -1,0 +1,396 @@
+{
+  "ppm_count": 30,
+  "verified": true,
+  "renders": [
+    {
+      "path": "artifacts/angles/galaxy-low-angle.ppm",
+      "bytes": 763168,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 1420,
+      "min_channel": 2,
+      "max_channel": 255,
+      "sha256": "6f6c271dc502525c8ae53319cef499cf55d3f88d3c31a63add1f818d5c88bb65"
+    },
+    {
+      "path": "artifacts/angles/galaxy-zoom.ppm",
+      "bytes": 762079,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 2348,
+      "min_channel": 2,
+      "max_channel": 255,
+      "sha256": "91058468c9394693791a677d8d1f963fcf7b478463f8d0e31ed60bcfb1079eb7"
+    },
+    {
+      "path": "artifacts/angles/nsmb-wii-low-angle.ppm",
+      "bytes": 847594,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 2876,
+      "min_channel": 0,
+      "max_channel": 253,
+      "sha256": "f44d38d62d5b989b99da61fe06755d4e5744431e52d395690eb551cdaeed6758"
+    },
+    {
+      "path": "artifacts/angles/nsmb-wii-orbit.ppm",
+      "bytes": 866721,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 1680,
+      "min_channel": 0,
+      "max_channel": 253,
+      "sha256": "cfbcead567c02e85da1059ac4fe03d430f8558a032079f1287fefd92ac7c6e19"
+    },
+    {
+      "path": "artifacts/angles/odyssey-low-angle.ppm",
+      "bytes": 854712,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 3041,
+      "min_channel": 0,
+      "max_channel": 255,
+      "sha256": "beb906d07ea27c513fda9bb5c5ae4c111227a8e297913ef4e290c47febeeb809"
+    },
+    {
+      "path": "artifacts/angles/odyssey-orbit.ppm",
+      "bytes": 871344,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 1166,
+      "min_channel": 0,
+      "max_channel": 222,
+      "sha256": "777f2fcff18c2c6144d25d01e73f7b14edacd6463363d9b2476832b37d24fa40"
+    },
+    {
+      "path": "artifacts/final/galaxy.ppm",
+      "bytes": 762079,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 2348,
+      "min_channel": 2,
+      "max_channel": 255,
+      "sha256": "91058468c9394693791a677d8d1f963fcf7b478463f8d0e31ed60bcfb1079eb7"
+    },
+    {
+      "path": "artifacts/final/nsmb-wii.ppm",
+      "bytes": 866721,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 1680,
+      "min_channel": 0,
+      "max_channel": 253,
+      "sha256": "cfbcead567c02e85da1059ac4fe03d430f8558a032079f1287fefd92ac7c6e19"
+    },
+    {
+      "path": "artifacts/final/odyssey.ppm",
+      "bytes": 871344,
+      "dimensions": [
+        320,
+        240
+      ],
+      "pixels": 76800,
+      "unique_rgb": 1166,
+      "min_channel": 0,
+      "max_channel": 222,
+      "sha256": "777f2fcff18c2c6144d25d01e73f7b14edacd6463363d9b2476832b37d24fa40"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.ppm",
+      "bytes": 190904,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1377,
+      "min_channel": 2,
+      "max_channel": 255,
+      "sha256": "3cf238ca58d1fc5dd16cbbc34bda6c32d0422e35bcd3c85b758d0679ac6637d4"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.transition-00.ppm",
+      "bytes": 187195,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1218,
+      "min_channel": 2,
+      "max_channel": 223,
+      "sha256": "b50a19d122b41c32d6a24b5537d0fb62682168618ee0eb69860de96f37197884"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.transition-01.ppm",
+      "bytes": 171492,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 822,
+      "min_channel": 1,
+      "max_channel": 135,
+      "sha256": "303bbe1e7ac1f20d4e073be2270f097fc9dca5201a47fe40096fbbc04a28be31"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.transition-02.ppm",
+      "bytes": 115335,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1,
+      "min_channel": 0,
+      "max_channel": 0,
+      "sha256": "ad5dedbd73fdc3f32beb2582760bed03a7a4df54a0741fd22eae93b26c4b2d55"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.transition-03.ppm",
+      "bytes": 211067,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 623,
+      "min_channel": 0,
+      "max_channel": 157,
+      "sha256": "88eecb37258640f9dc3379dcea55b1dd91f8dade53be372c57a60ca050d70cad"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.transition-04.ppm",
+      "bytes": 216326,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 801,
+      "min_channel": 0,
+      "max_channel": 215,
+      "sha256": "1d4b8b4e2ba01aa82d552ef605204f2022182c77a40ea4d58915f09fa9b45447"
+    },
+    {
+      "path": "artifacts/transitions/galaxy-to-nsmb-wii.transition-05.ppm",
+      "bytes": 216729,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 881,
+      "min_channel": 1,
+      "max_channel": 253,
+      "sha256": "c80ef63629829834300a9aafd7ed66e970aefe72e7f0b39826bedcb1020eaff9"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.ppm",
+      "bytes": 216729,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 881,
+      "min_channel": 1,
+      "max_channel": 253,
+      "sha256": "c80ef63629829834300a9aafd7ed66e970aefe72e7f0b39826bedcb1020eaff9"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.transition-00.ppm",
+      "bytes": 216419,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 796,
+      "min_channel": 0,
+      "max_channel": 222,
+      "sha256": "3df873f7e888dd9fa25e899ae6929e4d8bdd1e3aa523c8b376fb9fba288ec5a6"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.transition-01.ppm",
+      "bytes": 205996,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 548,
+      "min_channel": 0,
+      "max_channel": 134,
+      "sha256": "b15c933dae43a814518c85aff2f2276c4a54a7bf8facc55a91df4bc83dd7a130"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.transition-02.ppm",
+      "bytes": 115335,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1,
+      "min_channel": 0,
+      "max_channel": 0,
+      "sha256": "ad5dedbd73fdc3f32beb2582760bed03a7a4df54a0741fd22eae93b26c4b2d55"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.transition-03.ppm",
+      "bytes": 182478,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 492,
+      "min_channel": 0,
+      "max_channel": 137,
+      "sha256": "c41caeadca358a7c6e63bd2e50d9c11d254966322ff09b000122fbde001fc1ad"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.transition-04.ppm",
+      "bytes": 197730,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 579,
+      "min_channel": 0,
+      "max_channel": 189,
+      "sha256": "9292e1771f26c1a5511b957fbba182429a1e21bba0287304864fbbd972cb772a"
+    },
+    {
+      "path": "artifacts/transitions/nsmb-wii-to-odyssey.transition-05.ppm",
+      "bytes": 217960,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 642,
+      "min_channel": 0,
+      "max_channel": 222,
+      "sha256": "3b8256a253321b452a8bc2f658d42c34b1600af84eb1e06fa020bc1746ee936b"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.ppm",
+      "bytes": 217960,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 642,
+      "min_channel": 0,
+      "max_channel": 222,
+      "sha256": "3b8256a253321b452a8bc2f658d42c34b1600af84eb1e06fa020bc1746ee936b"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.transition-00.ppm",
+      "bytes": 199757,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 594,
+      "min_channel": 0,
+      "max_channel": 195,
+      "sha256": "6336876e78ef99587701d40b03df9683f3c6646eb13019931ccb8e67c2c7e302"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.transition-01.ppm",
+      "bytes": 180053,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 452,
+      "min_channel": 0,
+      "max_channel": 118,
+      "sha256": "187737c63a405380e9cd8d8828e8fd94c8390d746bbfeadcf5059998755adcbc"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.transition-02.ppm",
+      "bytes": 115335,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1,
+      "min_channel": 0,
+      "max_channel": 0,
+      "sha256": "ad5dedbd73fdc3f32beb2582760bed03a7a4df54a0741fd22eae93b26c4b2d55"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.transition-03.ppm",
+      "bytes": 173355,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 928,
+      "min_channel": 1,
+      "max_channel": 158,
+      "sha256": "a20af94d88275d9a78009dd9ff2a7205bb94847ffa4ea94f924e3bc67e738ae2"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.transition-04.ppm",
+      "bytes": 185213,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1196,
+      "min_channel": 2,
+      "max_channel": 216,
+      "sha256": "2f5ca5d9d5d8048d609cb095ecdfe90f97894835293801f02414dbeaf5b952d6"
+    },
+    {
+      "path": "artifacts/transitions/odyssey-to-galaxy.transition-05.ppm",
+      "bytes": 190904,
+      "dimensions": [
+        160,
+        120
+      ],
+      "pixels": 19200,
+      "unique_rgb": 1377,
+      "min_channel": 2,
+      "max_channel": 255,
+      "sha256": "3cf238ca58d1fc5dd16cbbc34bda6c32d0422e35bcd3c85b758d0679ac6637d4"
+    }
+  ]
+}

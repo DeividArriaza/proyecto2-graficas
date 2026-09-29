@@ -1,0 +1,11 @@
+[package]
+name = "proyecto2-graficas"
+version = "0.1.0"
+edition = "2021"
+description = "Diorama raytraced por CPU construido con cubos texturizados"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
