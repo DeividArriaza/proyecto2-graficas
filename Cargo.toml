@@ -6,6 +6,7 @@ description = "Diorama raytraced por CPU construido con cubos texturizados"
 
 [dependencies]
 minifb = "0.26.0"
+rayon = "1.10.0"
 
 [profile.release]
 opt-level = 3

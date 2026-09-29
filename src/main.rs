@@ -7,6 +7,7 @@ use std::{
 };
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
+use rayon::prelude::*;
 
 const EPS: f32 = 0.001;
 const MAX_DEPTH: u32 = 3;
@@ -375,6 +376,39 @@ fn scene(id: usize) -> Scene {
                     Kind::Metal,
                 );
             }
+            // Odyssey's airship silhouette: hull, cabin, mast and cap.
+            cube(
+                &mut c,
+                V::new(0., 1.3, 0.7),
+                V::new(5.5, 0.55, 2.2),
+                Kind::Metal,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.9, 0.7),
+                V::new(2.6, 1.0, 1.25),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 2.75, 0.7),
+                V::new(0.35, 1.0, 0.35),
+                Kind::Metal,
+            );
+            cube(
+                &mut c,
+                V::new(0., 3.3, 0.7),
+                V::new(1.5, 0.22, 1.5),
+                Kind::Brick,
+            );
+            for x in [-2.0, 2.0] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.85, 0.7),
+                    V::new(0.45, 1.0, 0.45),
+                    Kind::Metal,
+                );
+            }
         }
         1 => {
             for x in -6..=6 {
@@ -401,6 +435,21 @@ fn scene(id: usize) -> Scene {
                     V::new(a.cos() * 4., 1.2, a.sin() * 4.),
                     V::new(0.45, 0.45, 0.45),
                     Kind::Star,
+                );
+            }
+            // A block-built planetoid and orbital star ring make the Galaxy scene read as space.
+            for i in 0..16 {
+                let a = i as f32 * std::f32::consts::FRAC_PI_8;
+                let radius = if i % 2 == 0 { 2.2 } else { 2.8 };
+                cube(
+                    &mut c,
+                    V::new(
+                        a.cos() * radius,
+                        1.0 + (i % 3) as f32 * 0.25,
+                        a.sin() * radius,
+                    ),
+                    V::new(0.6, 0.6, 0.6),
+                    if i % 3 == 0 { Kind::Star } else { Kind::Stone },
                 );
             }
         }
@@ -430,6 +479,41 @@ fn scene(id: usize) -> Scene {
                 cube(&mut c, V::new(x, 3., 2.), V::new(2., 1., 2.), Kind::Pipe);
             }
             cube(&mut c, V::new(0., 1., 2.), V::new(2., 2., 1.), Kind::Brick);
+            // Castle silhouette and a central doorway for the NSMB diorama.
+            cube(
+                &mut c,
+                V::new(0., 2.2, -2.8),
+                V::new(7., 4.4, 0.8),
+                Kind::Brick,
+            );
+            for x in [-3.0, 3.0] {
+                cube(
+                    &mut c,
+                    V::new(x, 3.5, -2.8),
+                    V::new(1.6, 6.5, 1.1),
+                    Kind::Stone,
+                );
+                for y in [6.2, 7.0] {
+                    cube(
+                        &mut c,
+                        V::new(x - 0.5, y, -2.8),
+                        V::new(0.45, 0.45, 1.1),
+                        Kind::Brick,
+                    );
+                    cube(
+                        &mut c,
+                        V::new(x + 0.5, y, -2.8),
+                        V::new(0.45, 0.45, 1.1),
+                        Kind::Brick,
+                    );
+                }
+            }
+            cube(
+                &mut c,
+                V::new(0., 1.1, -3.25),
+                V::new(1.5, 2.2, 0.3),
+                Kind::Pipe,
+            );
         }
     }
     let name = match id % 3 {
@@ -497,6 +581,16 @@ fn sky(dir: V, id: u8) -> V {
         V::new(0.12, 0.08, 0.18).lerp(V::new(1., 0.32, 0.12), t)
     }
 }
+fn schlick(cosi: f32, etai: f32, etat: f32) -> f32 {
+    let r0 = ((etat - etai) / (etat + etai)).powi(2);
+    r0 + (1. - r0) * (1. - cosi).powi(5)
+}
+fn refract_direction(incident: V, normal: V, etai: f32, etat: f32) -> Option<V> {
+    let cosi = (-incident).dot(normal).clamp(-1., 1.);
+    let eta = etai / etat;
+    let k = 1. - eta * eta * (1. - cosi * cosi);
+    (k >= 0.).then(|| (incident * eta + normal * (eta * cosi - k.sqrt())).norm())
+}
 fn nearest(scene: &Scene, r: Ray) -> Option<Hit> {
     let local = Ray {
         o: ry(r.o, -scene.yaw),
@@ -533,7 +627,7 @@ fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
     let base = texture(h.material, h.u, h.v);
     for &(lp, lc) in &scene.lights {
         let to = (lp - h.point).norm();
-        if visible(scene, h.point, to) {
+        if visible(scene, h.point, lp) {
             let lam = h.normal.dot(to).max(0.);
             let view = (-r.d).norm();
             let half = (to + view).norm();
@@ -542,17 +636,9 @@ fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
         }
     }
     if depth < MAX_DEPTH {
-        if h.material.reflect > 0. {
-            let refl = r.d - h.normal * 2. * r.d.dot(h.normal);
-            out += trace(
-                scene,
-                Ray {
-                    o: h.point + h.normal * EPS * 3.,
-                    d: refl.norm(),
-                },
-                depth + 1,
-            ) * h.material.reflect;
-        }
+        let mut reflect_weight = h.material.reflect.clamp(0., 1.);
+        let mut refract_weight = 0.;
+        let mut refracted = None;
         if h.material.transparency > 0. {
             let mut n = h.normal;
             let mut cosi = (-r.d).dot(n).clamp(-1., 1.);
@@ -563,19 +649,30 @@ fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
                 std::mem::swap(&mut etai, &mut etat);
                 n = -n;
             }
-            let eta = etai / etat;
-            let k = 1. - eta * eta * (1. - cosi * cosi);
-            if k >= 0. {
-                let refr = r.d * eta + n * (eta * cosi - k.sqrt());
-                out += trace(
-                    scene,
-                    Ray {
-                        o: h.point - n * EPS * 3.,
-                        d: refr.norm(),
-                    },
-                    depth + 1,
-                ) * h.material.transparency;
+            if let Some(refr) = refract_direction(r.d, n, etai, etat) {
+                let fresnel = schlick(cosi, etai, etat);
+                reflect_weight = reflect_weight.max(fresnel);
+                refract_weight = (1. - fresnel) * h.material.transparency;
+                refracted = Some((h.point - n * EPS * 3., refr));
+            } else {
+                reflect_weight = 1.;
             }
+        }
+        let local_weight = (1. - reflect_weight - refract_weight).max(0.);
+        out = out * local_weight;
+        if reflect_weight > 0. {
+            let refl = r.d - h.normal * 2. * r.d.dot(h.normal);
+            out += trace(
+                scene,
+                Ray {
+                    o: h.point + h.normal * EPS * 3.,
+                    d: refl.norm(),
+                },
+                depth + 1,
+            ) * reflect_weight;
+        }
+        if let Some((o, d)) = refracted {
+            out += trace(scene, Ray { o, d }, depth + 1) * refract_weight;
         }
     }
     out.clamp()
@@ -592,28 +689,31 @@ fn render_frame(
     h: u32,
     fade: f32,
     buffer: &mut [u32],
-    mut window: Option<&mut Window>,
+    window: Option<&mut Window>,
 ) -> io::Result<(u128, V)> {
     let started = Instant::now();
-    let mut avg = V::default();
-    for y in 0..h {
-        for x in 0..w {
-            let c = trace(scene, cam.ray(x, y, w, h), 0) * fade;
-            avg += c;
-            buffer[(y * w + x) as usize] = pixel(c);
-        }
-        if let Some(window) = window.as_deref_mut() {
-            if !window.is_open() {
-                break;
+    let row_avgs: Vec<V> = buffer
+        .par_chunks_mut(w as usize)
+        .enumerate()
+        .map(|(y, row)| {
+            let mut avg = V::default();
+            for (x, dst) in row.iter_mut().enumerate() {
+                let c = trace(scene, cam.ray(x as u32, y as u32, w, h), 0) * fade;
+                avg += c;
+                *dst = pixel(c);
             }
-            // Present partial rows so the render is visibly progressive.
-            if y % 4 == 3 || y + 1 == h {
-                window
-                    .update_with_buffer(buffer, w as usize, h as usize)
-                    .map_err(|error| io::Error::other(error.to_string()))?;
-            }
+            avg
+        })
+        .collect();
+    if let Some(window) = window {
+        if !window.is_open() {
+            return Ok((started.elapsed().as_millis(), V::default()));
         }
+        window
+            .update_with_buffer(buffer, w as usize, h as usize)
+            .map_err(|error| io::Error::other(error.to_string()))?;
     }
+    let avg = row_avgs.into_iter().fold(V::default(), |a, b| a + b);
     Ok((started.elapsed().as_millis(), avg / (w * h) as f32))
 }
 
@@ -670,9 +770,53 @@ fn transition_window(
     Ok(())
 }
 
+fn framebuffer_hash(buffer: &[u32]) -> u64 {
+    buffer.iter().fold(1469598103934665603, |hash, pixel| {
+        (hash ^ u64::from(*pixel)).wrapping_mul(1099511628211)
+    })
+}
+
+fn benchmark(scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Result<()> {
+    let mut camera = *cam;
+    let mut buffer = vec![0; (w * h) as usize];
+    let mut total_ms = 0u128;
+    let mut min_ms = u128::MAX;
+    let mut max_ms = 0;
+    let mut changed = 0;
+    let mut previous = 0;
+    for frame in 0..12 {
+        camera.az += 0.12;
+        camera.el = (camera.el + 0.01).min(1.2);
+        let (ms, _) = render_frame(scene, &camera, w, h, 1., &mut buffer, None)?;
+        let hash = framebuffer_hash(&buffer);
+        if frame > 0 && hash != previous {
+            changed += 1;
+        }
+        previous = hash;
+        total_ms += ms;
+        min_ms = min_ms.min(ms);
+        max_ms = max_ms.max(ms);
+    }
+    let avg_ms = total_ms as f64 / 12.0;
+    println!(
+        "BENCHMARK {} | {}x{} | frames=12 | changed_frames={} | avg_ms={:.1} | min_ms={} | max_ms={} | fps={:.2} | hash={:016x}",
+        scene.name,
+        w,
+        h,
+        changed,
+        avg_ms,
+        min_ms,
+        max_ms,
+        1000.0 / avg_ms,
+        previous
+    );
+    Ok(())
+}
+
 fn usage() {
     println!("Uso interactivo: cargo run -- [--scene 0|1|2] [--width N] [--height N]");
     println!("Exportación: cargo run -- --headless --scene 0 --output render.ppm [--width N] [--height N]");
+    println!("Benchmark: cargo run --release -- --benchmark --scene 0 [--width N] [--height N]");
     println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, N cambiar escena, Escape salir.");
 }
 fn main() -> io::Result<()> {
@@ -684,8 +828,9 @@ fn main() -> io::Result<()> {
     let mut id = 0usize;
     let mut w = 320u32;
     let mut h = 240u32;
-    let mut output = "render.ppm".to_string();
+    let mut output = None;
     let mut headless = false;
+    let mut do_benchmark = false;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -703,9 +848,10 @@ fn main() -> io::Result<()> {
             }
             "--output" => {
                 i += 1;
-                output = args[i].clone()
+                output = Some(args[i].clone())
             }
             "--render" | "--headless" => headless = true,
+            "--benchmark" => do_benchmark = true,
             "--interactive" => headless = false,
             _ => {}
         }
@@ -718,7 +864,16 @@ fn main() -> io::Result<()> {
         el: 0.22,
     };
     let mut s = scene(id);
+    if do_benchmark {
+        return benchmark(&s, &cam, w, h);
+    }
     if headless {
+        let Some(output) = output else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--headless requiere --output; no se crea render.ppm por defecto",
+            ));
+        };
         export_render(&s, &cam, w, h, Path::new(&output))?;
         return Ok(());
     }
@@ -732,37 +887,37 @@ fn main() -> io::Result<()> {
     window.set_target_fps(60);
     let mut buffer = vec![0; (w * h) as usize];
     let mut dirty = true;
+    let mut last_tick = Instant::now();
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        let now = Instant::now();
+        let dt = now.duration_since(last_tick).as_secs_f32().min(0.1);
+        last_tick = now;
         if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
-            cam.az -= 0.06;
+            cam.az -= 1.8 * dt;
             dirty = true;
         }
         if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
-            cam.az += 0.06;
+            cam.az += 1.8 * dt;
             dirty = true;
         }
         if window.is_key_down(Key::Up) || window.is_key_down(Key::W) {
-            cam.el = (cam.el + 0.04).min(1.35);
+            cam.el = (cam.el + 1.2 * dt).min(1.35);
             dirty = true;
         }
         if window.is_key_down(Key::Down) || window.is_key_down(Key::S) {
-            cam.el = (cam.el - 0.04).max(-1.0);
+            cam.el = (cam.el - 1.2 * dt).max(-1.0);
             dirty = true;
         }
-        if window.is_key_pressed(Key::Equal, KeyRepeat::No)
-            || window.is_key_pressed(Key::NumPadPlus, KeyRepeat::No)
-        {
-            cam.distance = (cam.distance - 0.7).max(4.);
+        if window.is_key_down(Key::Equal) || window.is_key_down(Key::NumPadPlus) {
+            cam.distance = (cam.distance - 8.0 * dt).max(4.);
             dirty = true;
         }
-        if window.is_key_pressed(Key::Minus, KeyRepeat::No)
-            || window.is_key_pressed(Key::NumPadMinus, KeyRepeat::No)
-        {
-            cam.distance = (cam.distance + 0.7).min(30.);
+        if window.is_key_down(Key::Minus) || window.is_key_down(Key::NumPadMinus) {
+            cam.distance = (cam.distance + 8.0 * dt).min(30.);
             dirty = true;
         }
-        if window.is_key_pressed(Key::R, KeyRepeat::No) {
-            s.yaw += 0.15;
+        if window.is_key_down(Key::R) {
+            s.yaw += 1.5 * dt;
             dirty = true;
         }
         if window.is_key_pressed(Key::N, KeyRepeat::No) {
@@ -836,5 +991,47 @@ mod tests {
     #[test]
     fn framebuffer_pixel_is_rgb888() {
         assert_eq!(pixel(V::new(1., 0.5, 0.)), 0xffba00);
+    }
+
+    #[test]
+    fn framebuffer_changes_when_camera_moves() {
+        let scene = scene(1);
+        let mut a = Camera {
+            target: V::new(0., 1., 0.),
+            distance: 12.,
+            az: 0.,
+            el: 0.22,
+        };
+        let mut first = vec![0; 24 * 16];
+        let mut second = vec![0; 24 * 16];
+        render_frame(&scene, &a, 24, 16, 1., &mut first, None).unwrap();
+        a.az += 0.35;
+        render_frame(&scene, &a, 24, 16, 1., &mut second, None).unwrap();
+        assert_ne!(framebuffer_hash(&first), framebuffer_hash(&second));
+    }
+
+    #[test]
+    fn shadows_use_light_position() {
+        let blocker = Cube {
+            min: V::new(-0.5, -0.5, 2.),
+            max: V::new(0.5, 0.5, 3.),
+            material: mat(Kind::Stone),
+        };
+        let scene = Scene {
+            name: "test",
+            cubes: vec![blocker],
+            lights: vec![(V::new(0., 0., 5.), V::new(1., 1., 1.))],
+            yaw: 0.,
+            sky: 0,
+        };
+        assert!(!visible(&scene, V::new(0., 0., 0.), V::new(0., 0., 5.)));
+        assert!(visible(&scene, V::new(2., 0., 0.), V::new(0., 0., 5.)));
+    }
+
+    #[test]
+    fn fresnel_and_total_internal_reflection_are_present() {
+        assert!((schlick(1., 1., 1.5) - 0.04).abs() < 0.001);
+        assert!(refract_direction(V::new(0., -1., 0.), V::new(0., 1., 0.), 1., 1.5).is_some());
+        assert!(refract_direction(V::new(0.95, 0.312, 0.), V::new(0., 1., 0.), 1.5, 1.).is_none());
     }
 }
