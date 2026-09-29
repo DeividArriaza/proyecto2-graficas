@@ -1,45 +1,64 @@
-# Proyecto 2 — Diorama con Raytracing
+# Proyecto 2 — Dioramas con raytracing
 
-Entrega autocontenida de un diorama raytraced por CPU, construido únicamente con Rust estándar y cubos AABB. La escena ofrece tres mundos conectados: Mario Odyssey, Mario Galaxy y NSMB Wii.
-
-## Requisitos cubiertos
-
-- Tres dioramas seleccionables (`--scene 0`, `1` o `2`) y cambio cíclico con `n`, que genera una transición de fade-out/fade-in en seis frames PPM.
-- Cubos con intersección slab, normales y UV por cara.
-- Texturas procedurales propias para ladrillo, pasto, tubería, metal, agua, estrella y piedra; cada material tiene albedo, specular, transparencia y reflectividad.
-- Reflexión (metal/agua), refracción con índice de refracción y transparencia (agua), emisión (estrella), iluminación difusa, specular y sombras.
-- Skybox procedural distinto por escena.
-- Cámara orbital con acercamiento/alejamiento y rotación; `r` rota el diorama.
-- Render paralelo no requerido por la restricción de librerías externas; el programa usa una resolución configurable y mantiene el renderer determinista y portable.
+Renderer de CPU en Rust para tres dioramas: Mario Odyssey, Mario Galaxy y NSMB Wii. Conserva geometría AABB con UV por cara, texturas procedurales, sombras, reflexión, refracción, emisión y skyboxes por escena.
 
 ## Ejecutar
 
+El comportamiento normal abre una ventana interactiva y la mantiene activa hasta cerrarla:
+
 ```bash
+cargo run
+```
+
+El framebuffer se actualiza progresivamente por filas durante cada render. No se crea ningún `render.ppm` al ejecutar así.
+
+Controles:
+
+| Tecla | Acción |
+| --- | --- |
+| Flechas o `WASD` | Orbitar y elevar/bajar la cámara |
+| `+` / `-` | Zoom |
+| `R` | Rotar el diorama |
+| `N` | Cambiar de escena con transición fade |
+| `Esc` o cerrar la ventana | Salir |
+
+Para exportar explícitamente un PPM sin ventana:
+
+```bash
+cargo run -- --headless --scene 0 --width 320 --height 240 --output odyssey.ppm
+# --render es un alias de --headless
+```
+
+`--scene` acepta `0` (Odyssey), `1` (Galaxy) o `2` (NSMB Wii). El modo headless es útil para smoke tests y exportación; los renders generados deben mantenerse fuera del working tree o ignorados.
+
+## Requisitos
+
+- Rust estable y Cargo.
+- En Linux, un servidor X11/Wayland para `cargo run`; en CI sin display puede usarse `xvfb-run`.
+- `minifb` proporciona la ventana y el blit del framebuffer. El raytracer permanece implementado en el proyecto, sin motor gráfico externo.
+
+## Arquitectura adoptada
+
+Se consultó directamente la rama pública [`18-RT-06-REFLECTIONS`](https://github.com/menene/cc2018-2026-02-10/tree/18-RT-06-REFLECTIONS) del repositorio de referencia. Se adaptó su patrón técnico de `minifb`: `Vec<u32>` como framebuffer, `Window::is_open`, polling de teclado, cámara orbital y `update_with_buffer`. La adaptación conserva la arquitectura y los materiales propios del Proyecto 2; no se incorporó su historial ni se copió su escena.
+
+La ventana sólo rerenderiza cuando cambia la cámara o la escena y presenta filas parciales mientras el raytracer calcula. `N` presenta seis pasos de fade entre dioramas. Reflexión, refracción, emisión, sombras, texturas y skyboxes siguen resolviéndose en `trace`.
+
+## Verificación
+
+```bash
+cargo fmt --check
+cargo check
+cargo clippy --all-targets --all-features -- -D warnings
 cargo test
-cargo run --release -- --scene 0 --width 320 --height 240 --output odyssey.ppm
-cargo run --release -- --interactive --output interactivo.ppm
+cargo build --release
 ```
 
-El resultado es un archivo PPM (`P3`), formato sin dependencias que se abre con GIMP, ImageMagick, Krita o un visor compatible. En modo interactivo, escribir comandos separados por espacios y ejecutar `render` para guardar el estado actual:
-
-`a/d` orbitar · `w/s` elevar · `+/-` zoom · `r` girar diorama · `n` siguiente escena/transición · `q` salir. La transición crea `render.transition-00.ppm` a `render.transition-05.ppm`.
-
-## Video de demostración
-
-La consigna solicita enlazar un video en el README. Se generó localmente un GIF reproducible de la transición Odyssey → Galaxy en [artifacts/proyecto2-demo.gif](artifacts/proyecto2-demo.gif); no está publicado ni sustituye la presentación humana. No se inventa ningún enlace externo. El commit incluye las capturas PNG finales, el GIF y `render-verification.json`; los PPM de `final/`, `angles/` y `transitions/` son renders locales reproducibles e intencionalmente ignorados por su volumen.
-
-Para regenerar el GIF después de ejecutar una transición con `--interactive`, usando Pillow disponible en el entorno:
+Las pruebas unitarias cubren intersección slab, existencia de geometría/materiales y órbita de cámara. El smoke test de exportación headless puede ejecutarse sin display con una resolución pequeña y una ruta temporal:
 
 ```bash
-python3 -c 'from pathlib import Path; from PIL import Image; p=Path("artifacts/transitions"); f=[Image.open(x).convert("RGB") for x in sorted(p.glob("odyssey-to-galaxy.transition-*.ppm"))]; f[0].save("artifacts/proyecto2-demo.gif",save_all=True,append_images=f[1:],duration=180,loop=0,optimize=False)'
+tmpdir=$(mktemp -d)
+cargo run -- --headless --width 32 --height 24 --output "$tmpdir/smoke.ppm"
+test -s "$tmpdir/smoke.ppm"
 ```
 
-## Verificación visual manual
-
-Abrir los tres `.ppm` generados y comprobar: diferenciación de skyboxes, texturas por cara, sombras, metal reflectivo, agua refractiva, estrella emisiva y control de cámara. La compilación y las pruebas automatizadas validan la geometría y los materiales, pero no sustituyen esta inspección visual ni la presentación en vivo.
-
-Capturas finales: [Odyssey](artifacts/final/odyssey.png), [Galaxy](artifacts/final/galaxy.png) y [NSMB Wii](artifacts/final/nsmb-wii.png). La verificación automatizada de los 30 PPM está resumida en `artifacts/render-verification.json`: valida existencia, formato P3, dimensiones, conteo de píxeles, variación RGB, rango de canales y SHA-256.
-
-## Fuentes y alcance
-
-La implementación sigue `instrucciones.md` y `PLAN.md`. No usa crates ni librerías externas, respetando explícitamente la restricción de la rúbrica.
+Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son generados automáticamente por `cargo run`.

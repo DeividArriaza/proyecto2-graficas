@@ -2,9 +2,11 @@ use std::{
     env,
     fs::File,
     io::{self, BufWriter, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::Instant,
 };
+
+use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 const EPS: f32 = 0.001;
 const MAX_DEPTH: u32 = 3;
@@ -452,6 +454,7 @@ fn scene(id: usize) -> Scene {
     }
 }
 
+#[derive(Clone, Copy)]
 struct Camera {
     target: V,
     distance: f32,
@@ -577,61 +580,100 @@ fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
     }
     out.clamp()
 }
-fn render(scene: &Scene, cam: &Camera, w: u32, h: u32, path: &Path) -> io::Result<(u128, V)> {
-    render_faded(scene, cam, w, h, path, 1.)
+fn pixel(c: V) -> u32 {
+    let q = |v: f32| -> u32 { (v.clamp(0., 1.).powf(1. / 2.2) * 255.) as u32 };
+    (q(c.x) << 16) | (q(c.y) << 8) | q(c.z)
 }
-fn render_faded(
+
+fn render_frame(
     scene: &Scene,
     cam: &Camera,
     w: u32,
     h: u32,
-    path: &Path,
     fade: f32,
+    buffer: &mut [u32],
+    mut window: Option<&mut Window>,
 ) -> io::Result<(u128, V)> {
     let started = Instant::now();
-    let mut f = BufWriter::new(File::create(path)?);
-    writeln!(f, "P3\n{} {}\n255", w, h)?;
     let mut avg = V::default();
     for y in 0..h {
         for x in 0..w {
             let c = trace(scene, cam.ray(x, y, w, h), 0) * fade;
             avg += c;
-            let q = |v: f32| -> u32 { (v.clamp(0., 1.).powf(1. / 2.2) * 255.) as u32 };
-            write!(f, "{} {} {} ", q(c.x), q(c.y), q(c.z))?;
+            buffer[(y * w + x) as usize] = pixel(c);
         }
-        writeln!(f)?;
+        if let Some(window) = window.as_deref_mut() {
+            if !window.is_open() {
+                break;
+            }
+            // Present partial rows so the render is visibly progressive.
+            if y % 4 == 3 || y + 1 == h {
+                window
+                    .update_with_buffer(buffer, w as usize, h as usize)
+                    .map_err(|error| io::Error::other(error.to_string()))?;
+            }
+        }
     }
-    f.flush()?;
     Ok((started.elapsed().as_millis(), avg / (w * h) as f32))
 }
-fn transition(
+
+fn write_ppm(path: &Path, buffer: &[u32], w: u32, h: u32) -> io::Result<()> {
+    let mut f = BufWriter::new(File::create(path)?);
+    writeln!(f, "P3\n{} {}\n255", w, h)?;
+    for &rgb in buffer {
+        writeln!(
+            f,
+            "{} {} {}",
+            (rgb >> 16) & 255,
+            (rgb >> 8) & 255,
+            rgb & 255
+        )?;
+    }
+    f.flush()
+}
+
+fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> io::Result<()> {
+    let mut buffer = vec![0; (w * h) as usize];
+    let (ms, avg) = render_frame(scene, cam, w, h, 1., &mut buffer, None)?;
+    write_ppm(output, &buffer, w, h)?;
+    println!(
+        "{} | {}x{} | {} ms | promedio {:0.2},{:0.2},{:0.2} | {}",
+        scene.name,
+        w,
+        h,
+        ms,
+        avg.x,
+        avg.y,
+        avg.z,
+        output.display()
+    );
+    Ok(())
+}
+
+fn transition_window(
     from: &Scene,
     to: &Scene,
     cam: &Camera,
     w: u32,
     h: u32,
-    output: &str,
+    buffer: &mut [u32],
+    window: &mut Window,
 ) -> io::Result<()> {
-    let stem = output.strip_suffix(".ppm").unwrap_or(output);
-    let frames = [
-        (from, 0.75),
-        (from, 0.25),
-        (to, 0.),
-        (to, 0.35),
-        (to, 0.7),
-        (to, 1.),
-    ];
-    for (index, (scene, fade)) in frames.into_iter().enumerate() {
-        let path = PathBuf::from(format!("{}.transition-{:02}.ppm", stem, index));
-        render_faded(scene, cam, w, h, &path, fade)?;
+    for fade in [0.75, 0.25, 0., 0.35, 0.7, 1.] {
+        let scene = if fade < 0.5 { from } else { to };
+        render_frame(scene, cam, w, h, fade, buffer, Some(window))?;
+        if !window.is_open() {
+            break;
+        }
     }
+    let _ = (from, to);
     Ok(())
 }
+
 fn usage() {
-    println!("Uso: cargo run --release -- [--scene 0|1|2] [--output render.ppm] [--width N] [--height N] [--interactive]");
-    println!(
-        "Escenas: 0 Odyssey, 1 Galaxy, 2 NSMB Wii. El PPM se abre con cualquier visor compatible."
-    );
+    println!("Uso interactivo: cargo run -- [--scene 0|1|2] [--width N] [--height N]");
+    println!("Exportación: cargo run -- --headless --scene 0 --output render.ppm [--width N] [--height N]");
+    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, N cambiar escena, Escape salir.");
 }
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -643,7 +685,7 @@ fn main() -> io::Result<()> {
     let mut w = 320u32;
     let mut h = 240u32;
     let mut output = "render.ppm".to_string();
-    let mut interactive = false;
+    let mut headless = false;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -663,7 +705,8 @@ fn main() -> io::Result<()> {
                 i += 1;
                 output = args[i].clone()
             }
-            "--interactive" => interactive = true,
+            "--render" | "--headless" => headless = true,
+            "--interactive" => headless = false,
             _ => {}
         }
         i += 1;
@@ -675,50 +718,66 @@ fn main() -> io::Result<()> {
         el: 0.22,
     };
     let mut s = scene(id);
-    let (ms, avg) = render(&s, &cam, w, h, Path::new(&output))?;
-    println!(
-        "{} | {}x{} | {} ms | promedio {:0.2},{:0.2},{:0.2} | {}",
-        s.name, w, h, ms, avg.x, avg.y, avg.z, output
-    );
-    if !interactive {
+    if headless {
+        export_render(&s, &cam, w, h, Path::new(&output))?;
         return Ok(());
     }
-    println!("Controles: a/d orbitar, w/s elevar, +/- zoom, r girar diorama, n siguiente, render, q salir");
-    let stdin = io::stdin();
-    loop {
-        print!("> ");
-        io::stdout().flush()?;
-        let mut line = String::new();
-        if stdin.read_line(&mut line)? == 0 {
-            break;
+    let mut window = Window::new(
+        "Proyecto 2 — Dioramas raytraced",
+        w as usize,
+        h as usize,
+        WindowOptions::default(),
+    )
+    .map_err(|error| io::Error::other(error.to_string()))?;
+    window.set_target_fps(60);
+    let mut buffer = vec![0; (w * h) as usize];
+    let mut dirty = true;
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
+            cam.az -= 0.06;
+            dirty = true;
         }
-        for cmd in line.split_whitespace() {
-            match cmd {
-                "a" => cam.az -= 0.15,
-                "d" => cam.az += 0.15,
-                "w" => cam.el = (cam.el + 0.08).min(1.35),
-                "s" => cam.el = (cam.el - 0.08).max(-1.0),
-                "+" => cam.distance = (cam.distance - 0.7).max(4.),
-                "-" => cam.distance = (cam.distance + 0.7).min(30.),
-                "r" => s.yaw += 0.15,
-                "n" => {
-                    let old = s.clone();
-                    id = (id + 1) % 3;
-                    let next = scene(id);
-                    transition(&old, &next, &cam, w, h, &output)?;
-                    s = next;
-                    println!(
-                        "Transición guardada como {}.transition-00..05.ppm",
-                        output.trim_end_matches(".ppm")
-                    );
-                }
-                "render" => {
-                    let (ms, _) = render(&s, &cam, w, h, Path::new(&output))?;
-                    println!("Render listo en {} ms: {}", ms, output)
-                }
-                "q" | "quit" => return Ok(()),
-                _ => println!("Comando desconocido: {}", cmd),
-            }
+        if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
+            cam.az += 0.06;
+            dirty = true;
+        }
+        if window.is_key_down(Key::Up) || window.is_key_down(Key::W) {
+            cam.el = (cam.el + 0.04).min(1.35);
+            dirty = true;
+        }
+        if window.is_key_down(Key::Down) || window.is_key_down(Key::S) {
+            cam.el = (cam.el - 0.04).max(-1.0);
+            dirty = true;
+        }
+        if window.is_key_pressed(Key::Equal, KeyRepeat::No)
+            || window.is_key_pressed(Key::NumPadPlus, KeyRepeat::No)
+        {
+            cam.distance = (cam.distance - 0.7).max(4.);
+            dirty = true;
+        }
+        if window.is_key_pressed(Key::Minus, KeyRepeat::No)
+            || window.is_key_pressed(Key::NumPadMinus, KeyRepeat::No)
+        {
+            cam.distance = (cam.distance + 0.7).min(30.);
+            dirty = true;
+        }
+        if window.is_key_pressed(Key::R, KeyRepeat::No) {
+            s.yaw += 0.15;
+            dirty = true;
+        }
+        if window.is_key_pressed(Key::N, KeyRepeat::No) {
+            let old = s.clone();
+            id = (id + 1) % 3;
+            let next = scene(id);
+            transition_window(&old, &next, &cam, w, h, &mut buffer, &mut window)?;
+            s = next;
+            dirty = false;
+        }
+        if dirty {
+            render_frame(&s, &cam, w, h, 1., &mut buffer, Some(&mut window))?;
+            dirty = false;
+        } else {
+            window.update();
         }
     }
     Ok(())
@@ -756,5 +815,26 @@ mod tests {
     #[test]
     fn refraction_material_is_present() {
         assert!(mat(Kind::Water).transparency > 0. && mat(Kind::Water).ior > 1.);
+    }
+    #[test]
+    fn camera_orbit_preserves_distance_and_changes_ray() {
+        let camera = Camera {
+            target: V::new(0., 1., 0.),
+            distance: 12.,
+            az: 0.,
+            el: 0.22,
+        };
+        let before = camera.pos();
+        let mut rotated = camera;
+        rotated.az += 0.5;
+        let after = rotated.pos();
+        assert!(((before - camera.target).len() - 12.).abs() < 0.001);
+        assert!((after - before).len() > 0.1);
+        assert_ne!(camera.ray(0, 0, 32, 24).d, rotated.ray(0, 0, 32, 24).d);
+    }
+
+    #[test]
+    fn framebuffer_pixel_is_rgb888() {
+        assert_eq!(pixel(V::new(1., 0.5, 0.)), 0xffba00);
     }
 }
