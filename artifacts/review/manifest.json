@@ -1,0 +1,41 @@
+{
+  "source_commit": "adf40e9bee8d71a4b83c3ac2231228c93ce5c328",
+  "source_subject": "fix: make diorama interactive renderer realtime",
+  "renderer": {
+    "profile": "release",
+    "mode": "--headless with explicit --output",
+    "resolution": [640, 480],
+    "camera": {
+      "target": [0.0, 1.0, 0.0],
+      "distance": 12.0,
+      "azimuth": 0.0,
+      "elevation": 0.22
+    }
+  },
+  "renders": [
+    {
+      "scene": 0,
+      "name": "Mario Odyssey",
+      "path": "artifacts/review/odyssey-640x480.png",
+      "dimensions": [640, 480],
+      "render_ms": 321,
+      "sha256": "8e108213904aa0a3e3940fb2fc4b619cf391398dc730009f64c5108b39d2141f"
+    },
+    {
+      "scene": 1,
+      "name": "Mario Galaxy",
+      "path": "artifacts/review/galaxy-640x480.png",
+      "dimensions": [640, 480],
+      "render_ms": 250,
+      "sha256": "17461f4e4521531a5e6e21dc9e2fb8c490da20f13dc4710c5a73600c2b875771"
+    },
+    {
+      "scene": 2,
+      "name": "NSMB Wii",
+      "path": "artifacts/review/nsmb-wii-640x480.png",
+      "dimensions": [640, 480],
+      "render_ms": 267,
+      "sha256": "b7ce3f2b65ffce9bd374fd89cd3accff904e356d3198827308d08e384a2da8eb"
+    }
+  ]
+}
