@@ -11,6 +11,8 @@ use rayon::prelude::*;
 
 const EPS: f32 = 0.001;
 const MAX_DEPTH: u32 = 3;
+/// Fixed transition duration. Requests received while active are ignored.
+const TRANSITION_DURATION: f32 = 0.8;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct V {
@@ -746,6 +748,114 @@ fn pixel(c: V) -> u32 {
     (q(c.x) << 16) | (q(c.y) << 8) | q(c.z)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WorldTransition {
+    from: usize,
+    to: usize,
+    elapsed_ms: u32,
+    duration_ms: u32,
+}
+
+impl WorldTransition {
+    fn new(from: usize, to: usize) -> Self {
+        Self {
+            from: from % 3,
+            to: to % 3,
+            elapsed_ms: 0,
+            duration_ms: (TRANSITION_DURATION * 1000.0) as u32,
+        }
+    }
+
+    fn progress(self) -> f32 {
+        (self.elapsed_ms as f32 / self.duration_ms as f32).clamp(0.0, 1.0)
+    }
+
+    /// Cubic smoothstep keeps the start/end velocity at zero.
+    fn eased_progress(self) -> f32 {
+        let t = self.progress();
+        t * t * (3.0 - 2.0 * t)
+    }
+
+    fn advance(&mut self, elapsed_ms: u32) {
+        self.elapsed_ms = self
+            .elapsed_ms
+            .saturating_add(elapsed_ms)
+            .min(self.duration_ms);
+    }
+
+    fn finished(self) -> bool {
+        self.progress() >= 1.0
+    }
+}
+
+fn requested_world(current: usize, key: Option<Key>) -> Option<usize> {
+    match key {
+        Some(Key::Key1) => Some(0),
+        Some(Key::Key2) => Some(1),
+        Some(Key::Key3) => Some(2),
+        Some(Key::N) => Some((current + 1) % 3),
+        _ => None,
+    }
+}
+
+fn mix_pixel(a: u32, b: u32, t: f32, black: f32) -> u32 {
+    let channel = |shift: u32| {
+        let av = ((a >> shift) & 255) as f32;
+        let bv = ((b >> shift) & 255) as f32;
+        ((av * (1.0 - t) + bv * t) * (1.0 - black)).round() as u32
+    };
+    (channel(16) << 16) | (channel(8) << 8) | channel(0)
+}
+
+fn composite_transition(from: &[u32], to: &[u32], progress: f32, output: &mut [u32]) {
+    let t = progress.clamp(0.0, 1.0);
+    // A restrained black dip makes the temporal boundary legible without hiding either world.
+    let black = (std::f32::consts::PI * t).sin().max(0.0) * 0.18;
+    for ((dst, &a), &b) in output.iter_mut().zip(from).zip(to) {
+        *dst = mix_pixel(a, b, t, black);
+    }
+}
+
+fn render_world(
+    scene: &Scene,
+    cam: &Camera,
+    w: u32,
+    h: u32,
+    buffer: &mut [u32],
+) -> io::Result<u128> {
+    render_frame(scene, cam, w, h, 1.0, buffer, None).map(|(ms, _)| ms)
+}
+
+fn render_transition(
+    transition: &WorldTransition,
+    w: u32,
+    h: u32,
+    output: &mut [u32],
+    from_buffer: &mut [u32],
+    to_buffer: &mut [u32],
+) -> io::Result<u128> {
+    let from_scene = scene(transition.from);
+    let to_scene = scene(transition.to);
+    let from_camera = default_camera(transition.from);
+    let to_camera = default_camera(transition.to);
+    let t = transition.eased_progress();
+    let camera = Camera {
+        target: from_camera.target.lerp(to_camera.target, t),
+        distance: from_camera.distance * (1.0 - t) + to_camera.distance * t,
+        az: from_camera.az * (1.0 - t) + to_camera.az * t,
+        el: from_camera.el * (1.0 - t) + to_camera.el * t,
+    };
+    let mut from_scene = from_scene;
+    let mut to_scene = to_scene;
+    from_scene.yaw *= 1.0 - t;
+    to_scene.yaw *= t;
+    let started = Instant::now();
+    render_world(&from_scene, &camera, w, h, from_buffer)?;
+    render_world(&to_scene, &camera, w, h, to_buffer)?;
+    composite_transition(from_buffer, to_buffer, t, output);
+    Ok(started.elapsed().as_millis())
+}
+
 fn render_frame(
     scene: &Scene,
     cam: &Camera,
@@ -796,6 +906,28 @@ fn write_ppm(path: &Path, buffer: &[u32], w: u32, h: u32) -> io::Result<()> {
     f.flush()
 }
 
+fn write_png(path: &Path, buffer: &[u32], w: u32, h: u32) -> io::Result<()> {
+    let file = File::create(path)?;
+    let writer = BufWriter::new(file);
+    let mut encoder = png::Encoder::new(writer, w, h);
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut png_writer = encoder
+        .write_header()
+        .map_err(|error| io::Error::other(error.to_string()))?;
+    let mut bytes = Vec::with_capacity(buffer.len() * 3);
+    for &rgb in buffer {
+        bytes.extend_from_slice(&[
+            ((rgb >> 16) & 255) as u8,
+            ((rgb >> 8) & 255) as u8,
+            (rgb & 255) as u8,
+        ]);
+    }
+    png_writer
+        .write_image_data(&bytes)
+        .map_err(|error| io::Error::other(error.to_string()))
+}
+
 fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> io::Result<()> {
     let mut buffer = vec![0; (w * h) as usize];
     let (ms, avg) = render_frame(scene, cam, w, h, 1., &mut buffer, None)?;
@@ -814,33 +946,13 @@ fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> 
     Ok(())
 }
 
-fn transition_window(
-    from: &Scene,
-    to: &Scene,
-    cam: &Camera,
-    w: u32,
-    h: u32,
-    buffer: &mut [u32],
-    window: &mut Window,
-) -> io::Result<()> {
-    for fade in [0.75, 0.25, 0., 0.35, 0.7, 1.] {
-        let scene = if fade < 0.5 { from } else { to };
-        render_frame(scene, cam, w, h, fade, buffer, Some(window))?;
-        if !window.is_open() {
-            break;
-        }
-    }
-    let _ = (from, to);
-    Ok(())
-}
-
 fn framebuffer_hash(buffer: &[u32]) -> u64 {
     buffer.iter().fold(1469598103934665603, |hash, pixel| {
         (hash ^ u64::from(*pixel)).wrapping_mul(1099511628211)
     })
 }
 
-fn benchmark(scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Result<()> {
+fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Result<()> {
     let mut camera = *cam;
     let mut buffer = vec![0; (w * h) as usize];
     let mut total_ms = 0u128;
@@ -851,7 +963,7 @@ fn benchmark(scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Result<()> {
     for frame in 0..12 {
         camera.az += 0.12;
         camera.el = (camera.el + 0.01).min(1.2);
-        let (ms, _) = render_frame(scene, &camera, w, h, 1., &mut buffer, None)?;
+        let (ms, _) = render_frame(benchmark_scene, &camera, w, h, 1., &mut buffer, None)?;
         let hash = framebuffer_hash(&buffer);
         if frame > 0 && hash != previous {
             changed += 1;
@@ -864,7 +976,7 @@ fn benchmark(scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Result<()> {
     let avg_ms = total_ms as f64 / 12.0;
     println!(
         "BENCHMARK {} | {}x{} | frames=12 | changed_frames={} | avg_ms={:.1} | min_ms={} | max_ms={} | fps={:.2} | hash={:016x}",
-        scene.name,
+        benchmark_scene.name,
         w,
         h,
         changed,
@@ -874,6 +986,91 @@ fn benchmark(scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Result<()> {
         1000.0 / avg_ms,
         previous
     );
+    let mut transition = WorldTransition::new(0, 1);
+    let mut transition_output = vec![0; (w * h) as usize];
+    let mut transition_from = vec![0; (w * h) as usize];
+    let mut transition_to = vec![0; (w * h) as usize];
+    let transition_started = Instant::now();
+    let mut transition_frames = 0;
+    while !transition.finished() {
+        transition.advance(1000 / 12);
+        render_transition(
+            &transition,
+            w,
+            h,
+            &mut transition_output,
+            &mut transition_from,
+            &mut transition_to,
+        )?;
+        transition_frames += 1;
+    }
+    let transition_fps = transition_frames as f64 / transition_started.elapsed().as_secs_f64();
+    println!(
+        "TRANSITION_BENCHMARK Mario Odyssey -> Mario Galaxy | duration={:.1}s | frames={} | fps={:.2} | final={:016x}",
+        TRANSITION_DURATION,
+        transition_frames,
+        transition_fps,
+        framebuffer_hash(&transition_output)
+    );
+    Ok(())
+}
+
+fn transition_demo(dir: &Path, w: u32, h: u32) -> io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let mut manifest = String::from("{\n  \"duration_seconds\": 0.8,\n  \"input_during_transition\": \"ignored\",\n  \"frames\": [\n");
+    let mut first = true;
+    let mut frame_no = 0;
+    let mut timings = Vec::new();
+    for (from, to) in [(0, 1), (1, 2)] {
+        let mut transition = WorldTransition::new(from, to);
+        let mut output = vec![0; (w * h) as usize];
+        let mut from_buffer = vec![0; (w * h) as usize];
+        let mut to_buffer = vec![0; (w * h) as usize];
+        let mut phase_hashes = Vec::new();
+        for elapsed in [0, 200, 400, 600, 800] {
+            transition.elapsed_ms = elapsed;
+            let started = Instant::now();
+            render_transition(
+                &transition,
+                w,
+                h,
+                &mut output,
+                &mut from_buffer,
+                &mut to_buffer,
+            )?;
+            let ms = started.elapsed().as_millis();
+            let hash = framebuffer_hash(&output);
+            phase_hashes.push(hash);
+            let name = format!("frame-{frame_no:02}.png");
+            let path = dir.join(&name);
+            write_png(&path, &output, w, h)?;
+            if !first {
+                manifest.push_str(",\n");
+            }
+            first = false;
+            manifest.push_str(&format!(
+                "    {{\"file\":\"{name}\",\"from\":\"{}\",\"to\":\"{}\",\"elapsed_ms\":{elapsed},\"render_ms\":{ms},\"hash\":\"{hash:016x}\"}}",
+                scene(from).name,
+                scene(to).name
+            ));
+            timings.push(ms);
+            frame_no += 1;
+        }
+        assert!(phase_hashes.windows(2).all(|pair| pair[0] != pair[1]));
+    }
+    let total_ms: u128 = timings.iter().sum();
+    let fps = frame_no as f64 / (total_ms.max(1) as f64 / 1000.0);
+    manifest.push_str(&format!(
+        "\n  ],\n  \"hashes_distinct_within_each_transition\": true,\n  \"fps\": {:.2},\n  \"final_world\": \"NSMB Wii\"\n}}\n",
+        fps
+    ));
+    std::fs::write(dir.join("manifest.json"), manifest)?;
+    println!(
+        "TRANSITION_DEMO {} frames={} fps={fps:.2} manifest={}",
+        dir.display(),
+        frame_no,
+        dir.join("manifest.json").display()
+    );
     Ok(())
 }
 
@@ -881,7 +1078,8 @@ fn usage() {
     println!("Uso interactivo: cargo run -- [--scene 0|1|2] [--width N] [--height N]");
     println!("Exportación: cargo run -- --headless --scene 0 --output render.ppm [--width N] [--height N]");
     println!("Benchmark: cargo run --release -- --benchmark --scene 0 [--width N] [--height N]");
-    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, N cambiar escena, Escape salir.");
+    println!("Demo headless: cargo run -- --transition-demo DIR [--width N] [--height N]");
+    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, N/1/2/3 cambiar escena, Escape salir.");
 }
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -895,6 +1093,7 @@ fn main() -> io::Result<()> {
     let mut output = None;
     let mut headless = false;
     let mut do_benchmark = false;
+    let mut demo_dir = None;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -916,6 +1115,10 @@ fn main() -> io::Result<()> {
             }
             "--render" | "--headless" => headless = true,
             "--benchmark" => do_benchmark = true,
+            "--transition-demo" => {
+                i += 1;
+                demo_dir = Some(args[i].clone())
+            }
             "--interactive" => headless = false,
             _ => {}
         }
@@ -925,6 +1128,9 @@ fn main() -> io::Result<()> {
     let mut s = scene(id);
     if do_benchmark {
         return benchmark(&s, &cam, w, h);
+    }
+    if let Some(dir) = demo_dir {
+        return transition_demo(Path::new(&dir), w, h);
     }
     if headless {
         let Some(output) = output else {
@@ -945,6 +1151,8 @@ fn main() -> io::Result<()> {
     .map_err(|error| io::Error::other(error.to_string()))?;
     window.set_target_fps(60);
     let mut buffer = vec![0; (w * h) as usize];
+    let mut transition_buffers = (vec![0; (w * h) as usize], vec![0; (w * h) as usize]);
+    let mut transition = None;
     let mut dirty = true;
     let mut last_tick = Instant::now();
     while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -979,16 +1187,39 @@ fn main() -> io::Result<()> {
             s.yaw += 1.5 * dt;
             dirty = true;
         }
-        if window.is_key_pressed(Key::N, KeyRepeat::No) {
-            let old = s.clone();
-            id = (id + 1) % 3;
-            let next = scene(id);
-            transition_window(&old, &next, &cam, w, h, &mut buffer, &mut window)?;
-            s = next;
-            cam = default_camera(id);
-            dirty = false;
+        let requested = [Key::N, Key::Key1, Key::Key2, Key::Key3]
+            .into_iter()
+            .find(|key| window.is_key_pressed(*key, KeyRepeat::No));
+        if transition.is_none() {
+            if let Some(next_id) = requested_world(id, requested) {
+                if next_id != id {
+                    transition = Some(WorldTransition::new(id, next_id));
+                }
+            }
         }
-        if dirty {
+        if let Some(mut active) = transition {
+            active.advance((dt * 1000.0) as u32);
+            render_transition(
+                &active,
+                w,
+                h,
+                &mut buffer,
+                &mut transition_buffers.0,
+                &mut transition_buffers.1,
+            )?;
+            window
+                .update_with_buffer(&buffer, w as usize, h as usize)
+                .map_err(|error| io::Error::other(error.to_string()))?;
+            if active.finished() {
+                id = active.to;
+                s = scene(id);
+                cam = default_camera(id);
+                dirty = false;
+                transition = None;
+            } else {
+                transition = Some(active);
+            }
+        } else if dirty {
             render_frame(&s, &cam, w, h, 1., &mut buffer, Some(&mut window))?;
             dirty = false;
         } else {
@@ -1086,6 +1317,48 @@ mod tests {
         a.az += 0.35;
         render_frame(&scene, &a, 24, 16, 1., &mut second, None).unwrap();
         assert_ne!(framebuffer_hash(&first), framebuffer_hash(&second));
+    }
+
+    #[test]
+    fn transition_state_has_bounded_smooth_progress_and_finishes() {
+        let mut transition = WorldTransition::new(0, 1);
+        assert_eq!(transition.progress(), 0.0);
+        assert_eq!(transition.eased_progress(), 0.0);
+        transition.advance(200);
+        assert!((transition.progress() - 0.25).abs() < 0.001);
+        assert!(transition.eased_progress() > 0.0 && transition.eased_progress() < 1.0);
+        assert_ne!(transition.eased_progress(), transition.progress());
+        transition.advance(10_000);
+        assert_eq!(transition.progress(), 1.0);
+        assert_eq!(transition.eased_progress(), 1.0);
+        assert!(transition.finished());
+    }
+
+    #[test]
+    fn direct_and_cyclic_world_selection_are_deterministic() {
+        assert_eq!(requested_world(0, Some(Key::N)), Some(1));
+        assert_eq!(requested_world(2, Some(Key::N)), Some(0));
+        assert_eq!(requested_world(0, Some(Key::Key1)), Some(0));
+        assert_eq!(requested_world(0, Some(Key::Key2)), Some(1));
+        assert_eq!(requested_world(0, Some(Key::Key3)), Some(2));
+        assert_eq!(requested_world(0, None), None);
+    }
+
+    #[test]
+    fn transition_blends_both_worlds_without_an_instant_jump() {
+        let from = vec![0x10_20_30; 4];
+        let to = vec![0xe0_d0_c0; 4];
+        let mut start = vec![0; 4];
+        let mut middle = vec![0; 4];
+        let mut end = vec![0; 4];
+        composite_transition(&from, &to, 0.0, &mut start);
+        composite_transition(&from, &to, 0.5, &mut middle);
+        composite_transition(&from, &to, 1.0, &mut end);
+        assert_eq!(start, from);
+        assert_eq!(end, to);
+        assert_ne!(framebuffer_hash(&start), framebuffer_hash(&middle));
+        assert_ne!(framebuffer_hash(&middle), framebuffer_hash(&end));
+        assert_ne!(start, end);
     }
 
     #[test]

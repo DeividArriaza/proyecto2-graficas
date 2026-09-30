@@ -19,7 +19,8 @@ Controles:
 | Flechas o `WASD` mantenidas | Orbitar y elevar/bajar la cámara continuamente |
 | `+` / `-` mantenidas | Zoom continuo |
 | `R` mantenida | Rotar el diorama continuamente |
-| `N` | Cambiar de escena con transición fade |
+| `N` | Transición al siguiente mundo: Odyssey → Galaxy → NSMB Wii → Odyssey |
+| `1` / `2` / `3` | Transición directa a Odyssey / Galaxy / NSMB Wii |
 | `Esc` o cerrar la ventana | Salir |
 
 Para exportar explícitamente un PPM sin ventana:
@@ -50,7 +51,13 @@ cargo run --release -- --benchmark --scene 0 --width 320 --height 240
 Se consultó directamente la rama pública [`18-RT-06-REFLECTIONS`](https://github.com/menene/cc2018-2026-02-10/tree/18-RT-06-REFLECTIONS) del repositorio de referencia. Se adaptó su patrón técnico de `minifb`: `Vec<u32>` como framebuffer, `Window::is_open`, polling de teclado, cámara orbital y `update_with_buffer`. La adaptación conserva la arquitectura y los materiales propios del Proyecto 2; no se incorporó su historial ni se copió su escena.
 
 La ventana rerenderiza cuando cambia la cámara o la escena; las teclas mantenidas usan
-delta-time para movimiento continuo. `N` presenta seis pasos de fade entre dioramas.
+delta-time para movimiento continuo. `WorldTransition` conserva explícitamente mundo
+origen/destino, progreso acotado `0..1`, cámara interpolada y duración fija de **0.8 s**.
+Cada frame renderiza ambos mundos, aplica easing smoothstep y compone sus framebuffers con
+crossfade y un fundido a negro leve; no hay salto instantáneo. Mientras una transición está
+activa, `N` y `1/2/3` se ignoran de forma determinista (no se encolan ni reinician); al
+terminar, el mundo destino queda activo. Esc sigue cerrando la ventana y no se genera
+`render.ppm` por defecto.
 Rayon paraleliza las filas del framebuffer. Reflexión conserva la energía local/reflejada,
 refracción usa Schlick y maneja reflexión interna total; sombras, texturas y skyboxes
 siguen resolviéndose en `trace`.
@@ -79,6 +86,21 @@ tmpdir=$(mktemp -d)
 cargo run -- --headless --width 32 --height 24 --output "$tmpdir/smoke.ppm"
 test -s "$tmpdir/smoke.ppm"
 ```
+
+Para validar la transición sin display se puede generar una secuencia pequeña de diez
+PNG (inicio, tres puntos intermedios y final para Odyssey→Galaxy y Galaxy→NSMB Wii) junto
+con hashes, tiempos de render y FPS:
+
+```bash
+cargo run --release -- --transition-demo artifacts/transition-demo --width 96 --height 72
+```
+
+El manifest queda en `artifacts/transition-demo/manifest.json`; los hashes de los frames
+intermedios deben ser distintos y el último frame declara `NSMB Wii` como mundo final.
+Para medir rendimiento, `--benchmark` imprime tanto el FPS de órbita continua como
+`TRANSITION_BENCHMARK` para el crossfade. En el benchmark release de 320×240 se exige
+mantener al menos 10 FPS en órbita; la transición mide por separado sus dos renders por
+frame. No se declara una ventana real validada cuando no hay display/Xvfb disponible.
 
 Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son generados automáticamente por `cargo run`.
 
