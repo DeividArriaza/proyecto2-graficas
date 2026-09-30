@@ -1080,7 +1080,7 @@ fn render_world(
     h: u32,
     buffer: &mut [u32],
 ) -> io::Result<u128> {
-    render_frame(scene, cam, w, h, 1.0, buffer, None).map(|(ms, _)| ms)
+    render_frame(scene, cam, w, h, 1.0, buffer).map(|(ms, _)| ms)
 }
 
 fn render_transition(
@@ -1120,7 +1120,6 @@ fn render_frame(
     h: u32,
     fade: f32,
     buffer: &mut [u32],
-    window: Option<&mut Window>,
 ) -> io::Result<(u128, V)> {
     let started = Instant::now();
     let row_avgs: Vec<V> = buffer
@@ -1136,16 +1135,75 @@ fn render_frame(
             avg
         })
         .collect();
-    if let Some(window) = window {
-        if !window.is_open() {
-            return Ok((started.elapsed().as_millis(), V::default()));
-        }
-        window
-            .update_with_buffer(buffer, w as usize, h as usize)
-            .map_err(|error| io::Error::other(error.to_string()))?;
-    }
     let avg = row_avgs.into_iter().fold(V::default(), |a, b| a + b);
     Ok((started.elapsed().as_millis(), avg / (w * h) as f32))
+}
+
+fn scale_letterboxed(
+    source: &[u32],
+    source_width: usize,
+    source_height: usize,
+    target: &mut Vec<u32>,
+    target_width: usize,
+    target_height: usize,
+) {
+    target.clear();
+    target.resize(target_width.saturating_mul(target_height), 0);
+    if source_width == 0 || source_height == 0 || target_width == 0 || target_height == 0 {
+        return;
+    }
+
+    let (scaled_width, scaled_height) = if target_width.saturating_mul(source_height)
+        <= target_height.saturating_mul(source_width)
+    {
+        (
+            target_width,
+            (target_width * source_height / source_width).max(1),
+        )
+    } else {
+        (
+            (target_height * source_width / source_height).max(1),
+            target_height,
+        )
+    };
+    let offset_x = (target_width - scaled_width) / 2;
+    let offset_y = (target_height - scaled_height) / 2;
+
+    for y in 0..scaled_height {
+        let source_y = y * source_height / scaled_height;
+        let target_row = (offset_y + y) * target_width + offset_x;
+        let source_row = source_y * source_width;
+        for x in 0..scaled_width {
+            let source_x = x * source_width / scaled_width;
+            target[target_row + x] = source[source_row + source_x];
+        }
+    }
+}
+
+fn present_frame(
+    window: &mut Window,
+    source: &[u32],
+    source_width: usize,
+    source_height: usize,
+    presentation: &mut Vec<u32>,
+) -> io::Result<(usize, usize)> {
+    let (window_width, window_height) = window.get_size();
+    if window_width == 0 || window_height == 0 {
+        window.update();
+        return Ok((window_width, window_height));
+    }
+    scale_letterboxed(
+        source,
+        source_width,
+        source_height,
+        presentation,
+        window_width,
+        window_height,
+    );
+    window
+        .update_with_buffer(presentation, window_width, window_height)
+        .map_err(|error| io::Error::other(error.to_string()))?;
+    Ok((window_width, window_height))
 }
 
 fn write_ppm(path: &Path, buffer: &[u32], w: u32, h: u32) -> io::Result<()> {
@@ -1220,7 +1278,7 @@ fn frame_metrics(buffer: &[u32]) -> FrameMetrics {
 
 fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> io::Result<()> {
     let mut buffer = vec![0; (w * h) as usize];
-    let (ms, avg) = render_frame(scene, cam, w, h, 1., &mut buffer, None)?;
+    let (ms, avg) = render_frame(scene, cam, w, h, 1., &mut buffer)?;
     if output
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
@@ -1266,7 +1324,7 @@ fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Resul
     for frame in 0..12 {
         camera.az += 0.12;
         camera.el = (camera.el + 0.01).min(1.2);
-        let (ms, _) = render_frame(benchmark_scene, &camera, w, h, 1., &mut buffer, None)?;
+        let (ms, _) = render_frame(benchmark_scene, &camera, w, h, 1., &mut buffer)?;
         let hash = framebuffer_hash(&buffer);
         if frame > 0 && hash != previous {
             changed += 1;
@@ -1450,18 +1508,20 @@ fn main() -> io::Result<()> {
         w as usize,
         h as usize,
         WindowOptions {
-            // minifb 0.26 has no public fullscreen toggle. Scale::X4 gives a
-            // 1280x960 default for the 320x240 renderer while AspectRatioStretch
-            // keeps a resized window from distorting the image.
+            // Scale::X4 gives a 1280x960 default for the 320x240 renderer.
+            // Proportional resizing is performed in Rust because minifb 0.26's
+            // Wayland AspectRatioStretch path can access memory out of bounds.
             resize: true,
             scale: Scale::X4,
-            scale_mode: ScaleMode::AspectRatioStretch,
+            scale_mode: ScaleMode::Stretch,
             ..WindowOptions::default()
         },
     )
     .map_err(|error| io::Error::other(error.to_string()))?;
     window.set_target_fps(60);
     let mut buffer = vec![0; (w * h) as usize];
+    let mut presentation = Vec::new();
+    let mut presented_size = (0, 0);
     let mut transition_buffers = (vec![0; (w * h) as usize], vec![0; (w * h) as usize]);
     let mut transition = None;
     let mut dirty = true;
@@ -1518,9 +1578,13 @@ fn main() -> io::Result<()> {
                 &mut transition_buffers.0,
                 &mut transition_buffers.1,
             )?;
-            window
-                .update_with_buffer(&buffer, w as usize, h as usize)
-                .map_err(|error| io::Error::other(error.to_string()))?;
+            presented_size = present_frame(
+                &mut window,
+                &buffer,
+                w as usize,
+                h as usize,
+                &mut presentation,
+            )?;
             if active.finished() {
                 id = active.to;
                 s = scene(id);
@@ -1531,8 +1595,23 @@ fn main() -> io::Result<()> {
                 transition = Some(active);
             }
         } else if dirty {
-            render_frame(&s, &cam, w, h, 1., &mut buffer, Some(&mut window))?;
+            render_frame(&s, &cam, w, h, 1., &mut buffer)?;
+            presented_size = present_frame(
+                &mut window,
+                &buffer,
+                w as usize,
+                h as usize,
+                &mut presentation,
+            )?;
             dirty = false;
+        } else if window.get_size() != presented_size {
+            presented_size = present_frame(
+                &mut window,
+                &buffer,
+                w as usize,
+                h as usize,
+                &mut presentation,
+            )?;
         } else {
             window.update();
         }
@@ -1633,10 +1712,23 @@ mod tests {
         };
         let mut first = vec![0; 24 * 16];
         let mut second = vec![0; 24 * 16];
-        render_frame(&scene, &a, 24, 16, 1., &mut first, None).unwrap();
+        render_frame(&scene, &a, 24, 16, 1., &mut first).unwrap();
         a.az += 0.35;
-        render_frame(&scene, &a, 24, 16, 1., &mut second, None).unwrap();
+        render_frame(&scene, &a, 24, 16, 1., &mut second).unwrap();
         assert_ne!(framebuffer_hash(&first), framebuffer_hash(&second));
+    }
+
+    #[test]
+    fn letterbox_scaling_preserves_aspect_ratio() {
+        let source = vec![0x11_22_33; 4 * 3];
+        let mut target = Vec::new();
+        scale_letterboxed(&source, 4, 3, &mut target, 16, 9);
+        assert_eq!(target.len(), 16 * 9);
+        assert!(target.chunks_exact(16).all(|row| {
+            row[..2].iter().all(|pixel| *pixel == 0)
+                && row[2..14].iter().all(|pixel| *pixel == 0x11_22_33)
+                && row[14..].iter().all(|pixel| *pixel == 0)
+        }));
     }
 
     #[test]

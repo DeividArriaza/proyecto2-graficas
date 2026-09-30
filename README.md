@@ -10,7 +10,7 @@ El comportamiento normal abre una ventana interactiva y la mantiene activa hasta
 cargo run
 ```
 
-El framebuffer se renderiza en paralelo por filas y se presenta después de cada frame. El render interno predeterminado es `320×240` y se escala a una ventana inicial de `1280×960`; la ventana es redimensionable y conserva la proporción con franjas negras cuando hace falta. No se crea ningún `render.ppm` al ejecutar así.
+El framebuffer se renderiza en paralelo por filas y se presenta después de cada frame. El render interno predeterminado es `320×240` y se escala a una ventana inicial de `1280×960`; la ventana es redimensionable y conserva la proporción con franjas negras mediante un escalador propio. Esto evita un fallo de `AspectRatioStretch` en el backend Wayland de minifb 0.26. No se crea ningún `render.ppm` al ejecutar así.
 
 Controles:
 
