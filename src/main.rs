@@ -6,7 +6,7 @@ use std::{
     time::Instant,
 };
 
-use minifb::{Key, KeyRepeat, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Scale, ScaleMode, Window, WindowOptions};
 use rayon::prelude::*;
 
 const EPS: f32 = 0.001;
@@ -411,71 +411,255 @@ fn scene(id: usize) -> Scene {
     let mut spheres = Vec::new();
     match id % 3 {
         0 => {
-            // Odyssey floats against the sky so its hat-ship silhouette cannot read as a bed.
-            // Curved red hull, bright brim/wing, windows, rails and balloon.
+            // Odyssey: a deliberately voxel-first reconstruction of the hat ship.
+            // The hull, brim, tall red cup and headlight are stacked AABBs; rounded
+            // primitives are intentionally not used in this scene.
+            // Lower cream keel and red hull, stepped from stern to bow.
             cube(
                 &mut c,
-                V::new(0., 1.12, 0.15),
-                V::new(5.4, 0.55, 2.15),
-                Kind::Brick,
-            );
-            cube(
-                &mut c,
-                V::new(0., 1.48, 0.15),
-                V::new(6.65, 0.22, 2.75),
+                V::new(0., 0.62, -0.05),
+                V::new(5.4, 0.30, 2.35),
                 Kind::Cloud,
             );
             cube(
                 &mut c,
-                V::new(0., 1.72, 0.1),
-                V::new(4.8, 0.28, 2.05),
+                V::new(0., 0.88, 0.02),
+                V::new(6.15, 0.32, 2.72),
                 Kind::Brick,
             );
-            sphere(&mut spheres, V::new(-2.82, 1.17, 0.15), 0.8, Kind::Brick);
-            sphere(&mut spheres, V::new(2.82, 1.17, 0.15), 0.8, Kind::Brick);
-            sphere(&mut spheres, V::new(0., 2.1, -0.08), 1.12, Kind::Brick);
             cube(
                 &mut c,
-                V::new(0., 2.03, 0.52),
-                V::new(2.3, 0.58, 0.18),
+                V::new(0., 1.12, 0.10),
+                V::new(7.05, 0.22, 3.28),
                 Kind::Cloud,
             );
             cube(
                 &mut c,
-                V::new(0., 2.35, 0.15),
-                V::new(0.18, 1.85, 0.18),
-                Kind::Metal,
+                V::new(0., 1.30, 0.20),
+                V::new(5.95, 0.22, 2.62),
+                Kind::Brick,
             );
-            for x in [-2.55, 2.55] {
+            // Bow platform projects forward in three blocky steps.
+            cube(
+                &mut c,
+                V::new(0., 1.26, 1.78),
+                V::new(4.65, 0.18, 1.02),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.43, 2.28),
+                V::new(3.35, 0.16, 0.55),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.56, 2.62),
+                V::new(1.85, 0.14, 0.34),
+                Kind::Cloud,
+            );
+
+            // Wide rear wing/deck and stepped side skirts.
+            for x in [-2.95, 2.95] {
                 cube(
                     &mut c,
-                    V::new(x, 1.94, 0.9),
-                    V::new(0.11, 0.7, 0.11),
-                    Kind::Metal,
+                    V::new(x, 1.22, -0.10),
+                    V::new(0.62, 0.26, 2.30),
+                    Kind::Cloud,
                 );
                 cube(
                     &mut c,
-                    V::new(x, 2.25, 0.9),
-                    V::new(0.9, 0.08, 0.08),
-                    Kind::Metal,
+                    V::new(x * 0.93, 1.48, -0.12),
+                    V::new(0.54, 0.16, 1.86),
+                    Kind::Brick,
+                );
+            }
+
+            // Tall red cup/cabin: three progressively smaller horizontal bands.
+            cube(
+                &mut c,
+                V::new(0., 1.82, -0.18),
+                V::new(3.85, 0.62, 2.18),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 2.19, -0.18),
+                V::new(4.05, 0.13, 2.31),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 2.53, -0.18),
+                V::new(3.62, 0.58, 2.04),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 2.87, -0.18),
+                V::new(3.80, 0.12, 2.17),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 3.20, -0.18),
+                V::new(3.28, 0.55, 1.82),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 3.53, -0.18),
+                V::new(3.50, 0.13, 1.97),
+                Kind::Cloud,
+            );
+
+            // White-framed front windows, set into the tall cup.
+            for x in [-0.92, 0.92] {
+                cube(
+                    &mut c,
+                    V::new(x, 2.48, 0.89),
+                    V::new(0.70, 1.08, 0.10),
+                    Kind::Cloud,
                 );
                 cube(
                     &mut c,
-                    V::new(x, 1.2, 1.23),
-                    V::new(0.55, 0.36, 0.08),
+                    V::new(x, 2.48, 0.955),
+                    V::new(0.45, 0.75, 0.06),
                     Kind::Dark,
                 );
             }
             cube(
                 &mut c,
-                V::new(0., 1.2, 1.23),
-                V::new(0.72, 0.42, 0.08),
+                V::new(0., 2.48, 0.96),
+                V::new(0.18, 1.10, 0.08),
+                Kind::Cloud,
+            );
+
+            // Faceted voxel headlight: cream casing, red rim and refractive lens.
+            cube(
+                &mut c,
+                V::new(0., 1.62, 2.88),
+                V::new(1.42, 1.10, 0.34),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.62, 3.08),
+                V::new(1.12, 0.84, 0.12),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.62, 3.16),
+                V::new(0.72, 0.58, 0.07),
                 Kind::Water,
             );
-            sphere(&mut spheres, V::new(0., 4.75, 0.05), 1.25, Kind::Cloud);
-            sphere(&mut spheres, V::new(-0.62, 4.55, 0.48), 0.58, Kind::Cloud);
-            sphere(&mut spheres, V::new(0.78, 4.5, 0.35), 0.48, Kind::Cloud);
-            sphere(&mut spheres, V::new(0., 3.45, 0.15), 0.3, Kind::Star);
+            for (x, y) in [(-0.62, 1.62), (0.62, 1.62), (0., 2.08), (0., 1.16)] {
+                cube(
+                    &mut c,
+                    V::new(x, y, 3.17),
+                    V::new(0.20, 0.20, 0.08),
+                    Kind::Metal,
+                );
+            }
+
+            // Block rails around the bow and cabin deck.
+            for x in [-2.55, -1.65, 1.65, 2.55] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.88, 1.72),
+                    V::new(0.09, 0.86, 0.09),
+                    Kind::Metal,
+                );
+            }
+            for z in [0.88, 1.72] {
+                cube(
+                    &mut c,
+                    V::new(0., 2.23, z),
+                    V::new(5.10, 0.08, 0.08),
+                    Kind::Metal,
+                );
+            }
+            for x in [-2.55, 2.55] {
+                cube(
+                    &mut c,
+                    V::new(x, 2.23, 1.30),
+                    V::new(0.08, 0.08, 0.92),
+                    Kind::Metal,
+                );
+            }
+
+            // Rear mast, flowing block flag, stepped tail and twin voxel thrusters.
+            cube(
+                &mut c,
+                V::new(-2.45, 2.86, -1.10),
+                V::new(0.11, 3.25, 0.11),
+                Kind::Metal,
+            );
+            cube(
+                &mut c,
+                V::new(-1.66, 4.15, -1.10),
+                V::new(1.52, 0.34, 0.10),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(-0.98, 4.00, -1.10),
+                V::new(0.36, 0.24, 0.10),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.18, -1.78),
+                V::new(3.50, 0.34, 1.08),
+                Kind::Brick,
+            );
+            for x in [-1.22, 1.22] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.18, -2.32),
+                    V::new(0.78, 0.62, 0.48),
+                    Kind::Metal,
+                );
+                cube(
+                    &mut c,
+                    V::new(x, 1.18, -2.62),
+                    V::new(0.46, 0.34, 0.18),
+                    Kind::Star,
+                );
+            }
+
+            // The top globe/chimney remains a small stepped voxel ornament.
+            cube(
+                &mut c,
+                V::new(0., 3.83, -0.18),
+                V::new(1.18, 0.28, 1.04),
+                Kind::Dark,
+            );
+            cube(
+                &mut c,
+                V::new(0., 4.15, -0.18),
+                V::new(0.90, 0.42, 0.82),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 4.48, -0.18),
+                V::new(0.62, 0.30, 0.58),
+                Kind::Star,
+            );
+            cube(
+                &mut c,
+                V::new(0., 4.72, -0.18),
+                V::new(0.26, 0.22, 0.26),
+                Kind::Metal,
+            );
+            cube(
+                &mut c,
+                V::new(0., 4.93, -0.18),
+                V::new(0.16, 0.16, 0.16),
+                Kind::Star,
+            );
         }
         1 => {
             // Layered planetoid: rocky caps, clouds and a tilted, irregular star orbit.
@@ -676,8 +860,8 @@ impl Camera {
 fn default_camera(id: usize) -> Camera {
     match id % 3 {
         0 => Camera {
-            target: V::new(0., 2.65, 0.15),
-            distance: 11.1,
+            target: V::new(0., 2.45, 0.15),
+            distance: 8.8,
             az: 0.83,
             el: 0.46,
         },
@@ -1262,10 +1446,18 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
     let mut window = Window::new(
-        "Proyecto 2 — Dioramas raytraced",
+        "Proyecto 2 — Dioramas raytraced (320x240 interno, F11 no disponible en minifb)",
         w as usize,
         h as usize,
-        WindowOptions::default(),
+        WindowOptions {
+            // minifb 0.26 has no public fullscreen toggle. Scale::X4 gives a
+            // 1280x960 default for the 320x240 renderer while AspectRatioStretch
+            // keeps a resized window from distorting the image.
+            resize: true,
+            scale: Scale::X4,
+            scale_mode: ScaleMode::AspectRatioStretch,
+            ..WindowOptions::default()
+        },
     )
     .map_err(|error| io::Error::other(error.to_string()))?;
     window.set_target_fps(60);
@@ -1394,6 +1586,15 @@ mod tests {
             assert!(!s.cubes.is_empty());
             assert!(!s.lights.is_empty());
         }
+    }
+    #[test]
+    fn odyssey_is_a_cube_dominant_voxel_ship() {
+        let odyssey = scene(0);
+        assert!(odyssey.cubes.len() >= 45);
+        assert!(odyssey.spheres.is_empty());
+        // The tall cabin and the forward headlight both extend above/forward of the hull.
+        assert!(odyssey.cubes.iter().any(|cube| cube.max.y > 4.8));
+        assert!(odyssey.cubes.iter().any(|cube| cube.max.z > 3.1));
     }
     #[test]
     fn refraction_material_is_present() {

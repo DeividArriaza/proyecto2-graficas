@@ -10,7 +10,7 @@ El comportamiento normal abre una ventana interactiva y la mantiene activa hasta
 cargo run
 ```
 
-El framebuffer se renderiza en paralelo por filas y se presenta después de cada frame. No se crea ningún `render.ppm` al ejecutar así.
+El framebuffer se renderiza en paralelo por filas y se presenta después de cada frame. El render interno predeterminado es `320×240` y se escala a una ventana inicial de `1280×960`; la ventana es redimensionable y conserva la proporción con franjas negras cuando hace falta. No se crea ningún `render.ppm` al ejecutar así.
 
 Controles:
 
@@ -21,7 +21,10 @@ Controles:
 | `R` mantenida | Rotar el diorama continuamente |
 | `N` | Transición al siguiente mundo: Odyssey → Galaxy → NSMB Wii → Odyssey |
 | `1` / `2` / `3` | Transición directa a Odyssey / Galaxy / NSMB Wii |
+| `F11` | Sin acción: minifb 0.26 no ofrece una API pública y verificable para fullscreen |
 | `Esc` o cerrar la ventana | Salir |
+
+La minimización y cualquier fullscreen solicitado al sistema quedan a cargo del window manager. No se simula fullscreen con una API inexistente.
 
 Para exportar explícitamente un PPM sin ventana:
 
@@ -107,9 +110,12 @@ Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son
 
 ## Estado visual y límites
 
-La revisión visual v3 usa cámaras 3/4 específicas, iluminación key/fill/rim, tone
-mapping y composiciones separadas: Odyssey flota contra el skybox con casco rojo curvo,
-copa, ala clara, globo, barandas y ojo de buey refractivo; Galaxy combina océano,
+La revisión voxel posterior a v3 usa cámaras 3/4 específicas, iluminación key/fill/rim,
+tone mapping y composiciones separadas: Odyssey flota contra el skybox con casco crema y
+rojo escalonado, proa por capas, cabina/copa roja alta con bandas, ventanas blancas,
+faro frontal facetado de cubos, barandas, mástil/bandera, cola con propulsores y un globo
+superior formado también por cuboides. Odyssey no usa esferas: la silueta es un modelo
+voxel AABB inspirado en las capturas de referencia. Galaxy combina océano,
 continentes, accidentes y órbita inclinada; NSMB Wii muestra puerta, almenas, banderas,
 tuberías, bloques y monedas. Los PNG medidos, hashes y comparación con v2 están en
 `artifacts/review-v3/`; la nueva secuencia está en `artifacts/transition-demo-v3/`.
