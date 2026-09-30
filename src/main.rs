@@ -114,9 +114,12 @@ struct Material {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Kind {
     Grass,
+    Planet,
     Brick,
     Pipe,
     Metal,
+    Cloud,
+    Dark,
     Water,
     Star,
     Stone,
@@ -153,6 +156,15 @@ fn mat(k: Kind) -> Material {
             1.,
             V::default(),
         ),
+        Kind::Planet => Material::new(
+            k,
+            V::new(0.10, 0.48, 0.18),
+            0.22,
+            0.08,
+            0.,
+            1.,
+            V::default(),
+        ),
         Kind::Brick => Material::new(
             k,
             V::new(0.82, 0.07, 0.03),
@@ -172,6 +184,16 @@ fn mat(k: Kind) -> Material {
             V::default(),
         ),
         Kind::Metal => Material::new(k, V::new(0.78, 0.82, 0.9), 0.7, 0.34, 0., 1., V::default()),
+        Kind::Cloud => Material::new(k, V::new(0.94, 0.96, 1.0), 0.65, 0.2, 0., 1., V::default()),
+        Kind::Dark => Material::new(
+            k,
+            V::new(0.025, 0.035, 0.075),
+            0.5,
+            0.22,
+            0.,
+            1.,
+            V::default(),
+        ),
         Kind::Water => Material::new(
             k,
             V::new(0.08, 0.35, 0.52),
@@ -325,6 +347,15 @@ fn texture(m: Material, u: f32, v: f32) -> V {
             let n = ((u * 37.0).sin() * (v * 91.0).cos()).abs();
             m.albedo * (0.78 + n * 0.35)
         }
+        Kind::Planet => {
+            let continents = ((u * 11.0).sin() * (v * 7.0).cos()
+                + (u * 23.0 + v * 5.0).sin() * 0.45
+                + (v * 19.0).cos() * 0.25)
+                .clamp(-1.0, 1.0);
+            let ocean = V::new(0.05, 0.22, 0.38);
+            let land = V::new(0.12, 0.62, 0.16);
+            ocean.lerp(land, (continents + 1.0) * 0.5)
+        }
         Kind::Pipe => {
             let stripe = ((u * 12.).sin().abs() * 0.12) + 0.9;
             m.albedo * stripe
@@ -336,6 +367,8 @@ fn texture(m: Material, u: f32, v: f32) -> V {
                 m.albedo * 0.88
             }
         }
+        Kind::Cloud => m.albedo * (0.92 + 0.08 * (u * 17. + v * 11.).sin().abs()),
+        Kind::Dark => m.albedo * (0.75 + 0.25 * (u * 13. + v * 7.).sin().abs()),
         Kind::Water => m.albedo * (0.85 + 0.15 * (u * 20.).sin().abs()),
         Kind::Star => m.albedo * (0.9 + 0.1 * (u * 30.).sin().abs()),
         Kind::Stone => {
@@ -378,86 +411,91 @@ fn scene(id: usize) -> Scene {
     let mut spheres = Vec::new();
     match id % 3 {
         0 => {
-            for x in -6..=6 {
-                for z in -5..=5 {
-                    if x * x + z * z <= 38 {
-                        cube(
-                            &mut c,
-                            V::new(x as f32, 0., z as f32),
-                            V::new(1., 0.5, 1.),
-                            Kind::Stone,
-                        );
-                    }
-                }
+            // Odyssey floats against the sky so its hat-ship silhouette cannot read as a bed.
+            // Curved red hull, bright brim/wing, windows, rails and balloon.
+            cube(
+                &mut c,
+                V::new(0., 1.12, 0.15),
+                V::new(5.4, 0.55, 2.15),
+                Kind::Brick,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.48, 0.15),
+                V::new(6.65, 0.22, 2.75),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 1.72, 0.1),
+                V::new(4.8, 0.28, 2.05),
+                Kind::Brick,
+            );
+            sphere(&mut spheres, V::new(-2.82, 1.17, 0.15), 0.8, Kind::Brick);
+            sphere(&mut spheres, V::new(2.82, 1.17, 0.15), 0.8, Kind::Brick);
+            sphere(&mut spheres, V::new(0., 2.1, -0.08), 1.12, Kind::Brick);
+            cube(
+                &mut c,
+                V::new(0., 2.03, 0.52),
+                V::new(2.3, 0.58, 0.18),
+                Kind::Cloud,
+            );
+            cube(
+                &mut c,
+                V::new(0., 2.35, 0.15),
+                V::new(0.18, 1.85, 0.18),
+                Kind::Metal,
+            );
+            for x in [-2.55, 2.55] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.94, 0.9),
+                    V::new(0.11, 0.7, 0.11),
+                    Kind::Metal,
+                );
+                cube(
+                    &mut c,
+                    V::new(x, 2.25, 0.9),
+                    V::new(0.9, 0.08, 0.08),
+                    Kind::Metal,
+                );
+                cube(
+                    &mut c,
+                    V::new(x, 1.2, 1.23),
+                    V::new(0.55, 0.36, 0.08),
+                    Kind::Dark,
+                );
             }
             cube(
                 &mut c,
-                V::new(0., 0.42, 0.),
-                V::new(8.5, 0.22, 7.5),
+                V::new(0., 1.2, 1.23),
+                V::new(0.72, 0.42, 0.08),
                 Kind::Water,
             );
-            // Red hat-shaped Odyssey: broad hull, white deck, mast and balloon.
-            cube(
-                &mut c,
-                V::new(0., 1.25, 0.3),
-                V::new(6.2, 0.75, 2.6),
-                Kind::Brick,
-            );
-            cube(
-                &mut c,
-                V::new(0., 1.7, 0.3),
-                V::new(4.7, 0.35, 2.0),
-                Kind::Metal,
-            );
-            cube(
-                &mut c,
-                V::new(0., 2.05, -0.05),
-                V::new(2.8, 0.65, 1.45),
-                Kind::Brick,
-            );
-            cube(
-                &mut c,
-                V::new(-2.5, 1.45, 0.3),
-                V::new(1.0, 0.48, 1.7),
-                Kind::Brick,
-            );
-            cube(
-                &mut c,
-                V::new(2.5, 1.45, 0.3),
-                V::new(1.0, 0.48, 1.7),
-                Kind::Brick,
-            );
-            cube(
-                &mut c,
-                V::new(0., 3.2, -0.1),
-                V::new(0.22, 2.6, 0.22),
-                Kind::Metal,
-            );
-            cube(
-                &mut c,
-                V::new(0., 3.45, -0.32),
-                V::new(2.5, 1.5, 0.12),
-                Kind::Brick,
-            );
-            sphere(&mut spheres, V::new(0., 5.1, -0.15), 1.45, Kind::Brick);
-            sphere(&mut spheres, V::new(0., 5.1, 1.05), 0.42, Kind::Metal);
-            for x in [-1.1, 1.1] {
-                sphere(&mut spheres, V::new(x, 2.05, 1.05), 0.23, Kind::Star);
-            }
+            sphere(&mut spheres, V::new(0., 4.75, 0.05), 1.25, Kind::Cloud);
+            sphere(&mut spheres, V::new(-0.62, 4.55, 0.48), 0.58, Kind::Cloud);
+            sphere(&mut spheres, V::new(0.78, 4.5, 0.35), 0.48, Kind::Cloud);
+            sphere(&mut spheres, V::new(0., 3.45, 0.15), 0.3, Kind::Star);
         }
         1 => {
-            // Floating planetoid with a bright, deliberately sparse orbital ring.
-            sphere(&mut spheres, V::new(0., 1.9, 0.), 2.25, Kind::Grass);
-            sphere(&mut spheres, V::new(-0.55, 3.35, 0.55), 0.62, Kind::Stone);
-            sphere(&mut spheres, V::new(0.75, 3.45, -0.45), 0.36, Kind::Star);
-            for i in 0..18 {
-                let a = i as f32 * std::f32::consts::TAU / 18.;
-                let p = V::new(a.cos() * 4.1, 2.0 + a.sin() * 0.75, a.sin() * 2.8);
+            // Layered planetoid: rocky caps, clouds and a tilted, irregular star orbit.
+            sphere(&mut spheres, V::new(0., 1.9, 0.), 2.35, Kind::Planet);
+            sphere(&mut spheres, V::new(-0.7, 3.42, 0.48), 0.7, Kind::Stone);
+            sphere(&mut spheres, V::new(0.62, 3.7, -0.15), 0.42, Kind::Cloud);
+            sphere(&mut spheres, V::new(1.48, 2.55, 1.35), 0.32, Kind::Stone);
+            sphere(&mut spheres, V::new(-1.7, 1.65, 1.12), 0.25, Kind::Cloud);
+            for i in 0..24 {
+                let a = i as f32 * std::f32::consts::TAU / 24.;
+                let p = V::new(
+                    a.cos() * 4.35,
+                    2.05 + a.sin() * 1.15,
+                    a.sin() * 2.3 + a.cos() * 0.65,
+                );
                 sphere(
                     &mut spheres,
                     p,
-                    if i % 3 == 0 { 0.23 } else { 0.13 },
-                    if i % 3 == 0 { Kind::Star } else { Kind::Metal },
+                    if i % 5 == 0 { 0.25 } else { 0.1 },
+                    if i % 5 == 0 { Kind::Star } else { Kind::Cloud },
                 );
             }
             cube(
@@ -480,7 +518,7 @@ fn scene(id: usize) -> Scene {
                     }
                 }
             }
-            // Bright stone castle with a readable arch, towers, pipes and coin trail.
+            // Castle facade with a dark door, central crenels, flags, pipes, blocks and coins.
             cube(
                 &mut c,
                 V::new(0., 2.0, -2.7),
@@ -489,10 +527,24 @@ fn scene(id: usize) -> Scene {
             );
             cube(
                 &mut c,
-                V::new(0., 1.2, -3.2),
-                V::new(1.45, 2.3, 0.2),
+                V::new(0., 1.35, -2.18),
+                V::new(1.45, 2.45, 0.18),
+                Kind::Dark,
+            );
+            cube(
+                &mut c,
+                V::new(0., 2.55, -2.15),
+                V::new(2.0, 0.28, 0.22),
                 Kind::Brick,
             );
+            for x in [-0.82, 0.82] {
+                cube(
+                    &mut c,
+                    V::new(x, 1.35, -2.15),
+                    V::new(0.25, 2.4, 0.22),
+                    Kind::Brick,
+                );
+            }
             for x in [-3.1, 3.1] {
                 cube(
                     &mut c,
@@ -514,6 +566,26 @@ fn scene(id: usize) -> Scene {
                         Kind::Stone,
                     );
                 }
+                cube(
+                    &mut c,
+                    V::new(x, 7.75, -2.65),
+                    V::new(0.08, 1.5, 0.08),
+                    Kind::Metal,
+                );
+                cube(
+                    &mut c,
+                    V::new(x + 0.45, 7.3, -2.62),
+                    V::new(0.9, 0.5, 0.08),
+                    Kind::Brick,
+                );
+            }
+            for x in [-1.4, 0., 1.4] {
+                cube(
+                    &mut c,
+                    V::new(x, 4.15, -2.14),
+                    V::new(0.55, 0.62, 0.25),
+                    Kind::Stone,
+                );
             }
             for x in [-3.8, 3.8] {
                 cube(
@@ -604,22 +676,22 @@ impl Camera {
 fn default_camera(id: usize) -> Camera {
     match id % 3 {
         0 => Camera {
-            target: V::new(0., 2.35, 0.),
-            distance: 14.5,
-            az: 0.72,
-            el: 0.38,
+            target: V::new(0., 2.65, 0.15),
+            distance: 11.1,
+            az: 0.83,
+            el: 0.46,
         },
         1 => Camera {
             target: V::new(0., 2.0, 0.),
-            distance: 13.0,
-            az: 0.72,
-            el: 0.34,
+            distance: 11.8,
+            az: 0.78,
+            el: 0.42,
         },
         _ => Camera {
             target: V::new(0., 2.6, -1.2),
-            distance: 14.0,
-            az: 0.68,
-            el: 0.32,
+            distance: 12.8,
+            az: 0.75,
+            el: 0.4,
         },
     }
 }
@@ -634,7 +706,7 @@ fn sky(dir: V, id: u8) -> V {
         V::new(0.25, 0.55, 0.95).lerp(V::new(0.75, 0.9, 1.), t)
     } else {
         let t = (dir.y + 1.) * 0.5;
-        V::new(0.04, 0.1, 0.22).lerp(V::new(0.92, 0.38, 0.12), t)
+        V::new(0.015, 0.04, 0.12).lerp(V::new(0.16, 0.38, 0.56), t)
     }
 }
 fn schlick(cosi: f32, etai: f32, etat: f32) -> f32 {
@@ -744,7 +816,8 @@ fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
     out.clamp()
 }
 fn pixel(c: V) -> u32 {
-    let q = |v: f32| -> u32 { (v.clamp(0., 1.).powf(1. / 2.2) * 255.) as u32 };
+    let map = |v: f32| v.max(0.) * 1.15 / (1. + 0.15 * v.max(0.));
+    let q = |v: f32| -> u32 { (map(v).clamp(0., 1.).powf(1. / 2.2) * 255.) as u32 };
     (q(c.x) << 16) | (q(c.y) << 8) | q(c.z)
 }
 
@@ -810,7 +883,7 @@ fn mix_pixel(a: u32, b: u32, t: f32, black: f32) -> u32 {
 fn composite_transition(from: &[u32], to: &[u32], progress: f32, output: &mut [u32]) {
     let t = progress.clamp(0.0, 1.0);
     // A restrained black dip makes the temporal boundary legible without hiding either world.
-    let black = (std::f32::consts::PI * t).sin().max(0.0) * 0.18;
+    let black = (std::f32::consts::PI * t).sin().max(0.0) * 0.07;
     for ((dst, &a), &b) in output.iter_mut().zip(from).zip(to) {
         *dst = mix_pixel(a, b, t, black);
     }
@@ -928,12 +1001,53 @@ fn write_png(path: &Path, buffer: &[u32], w: u32, h: u32) -> io::Result<()> {
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
+#[derive(Clone, Copy)]
+struct FrameMetrics {
+    mean: f64,
+    stddev: f64,
+    p05: f64,
+    p95: f64,
+}
+
+fn frame_metrics(buffer: &[u32]) -> FrameMetrics {
+    let mut values: Vec<f64> = buffer
+        .iter()
+        .map(|rgb| {
+            0.2126 * f64::from((rgb >> 16) & 255)
+                + 0.7152 * f64::from((rgb >> 8) & 255)
+                + 0.0722 * f64::from(rgb & 255)
+        })
+        .collect();
+    let mean = values.iter().sum::<f64>() / values.len() as f64;
+    let stddev = (values
+        .iter()
+        .map(|value| (value - mean).powi(2))
+        .sum::<f64>()
+        / values.len() as f64)
+        .sqrt();
+    values.sort_by(f64::total_cmp);
+    FrameMetrics {
+        mean,
+        stddev,
+        p05: values[values.len() * 5 / 100],
+        p95: values[values.len() * 95 / 100],
+    }
+}
+
 fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> io::Result<()> {
     let mut buffer = vec![0; (w * h) as usize];
     let (ms, avg) = render_frame(scene, cam, w, h, 1., &mut buffer, None)?;
-    write_ppm(output, &buffer, w, h)?;
+    if output
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
+    {
+        write_png(output, &buffer, w, h)?;
+    } else {
+        write_ppm(output, &buffer, w, h)?;
+    }
+    let metrics = frame_metrics(&buffer);
     println!(
-        "{} | {}x{} | {} ms | promedio {:0.2},{:0.2},{:0.2} | {}",
+        "{} | {}x{} | {} ms | promedio {:0.2},{:0.2},{:0.2} | hash={:016x} | luma mean={:.3} stddev={:.3} p05={:.3} p95={:.3} | {}",
         scene.name,
         w,
         h,
@@ -941,6 +1055,11 @@ fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> 
         avg.x,
         avg.y,
         avg.z,
+        framebuffer_hash(&buffer),
+        metrics.mean,
+        metrics.stddev,
+        metrics.p05,
+        metrics.p95,
         output.display()
     );
     Ok(())
@@ -1299,7 +1418,7 @@ mod tests {
 
     #[test]
     fn framebuffer_pixel_is_rgb888() {
-        assert_eq!(pixel(V::new(1., 0.5, 0.)), 0xffba00);
+        assert_eq!(pixel(V::new(1., 0.5, 0.)), 0xffbf00);
     }
 
     #[test]

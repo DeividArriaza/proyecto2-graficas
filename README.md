@@ -30,6 +30,8 @@ cargo run -- --headless --scene 0 --width 320 --height 240 --output odyssey.ppm
 # --render es un alias de --headless
 ```
 
+Use una ruta terminada en `.png` para exportar PNG; cualquier otra extensión conserva PPM.
+
 El modo headless exige `--output`; así `cargo run` y un headless incompleto no crean
 `render.ppm` accidentalmente. Para medir doce frames con órbita continua y comprobar
 que el framebuffer cambia:
@@ -73,11 +75,10 @@ cargo build --release
 cargo run --release -- --benchmark --scene 0 --width 320 --height 240
 ```
 
-En el equipo de desarrollo, el benchmark release a 320×240 midió 11.92 FPS
-(Odyssey), 15.60 FPS (Galaxy) y 15.17 FPS (NSMB Wii), con 11 de 11 cambios de
-framebuffer durante la órbita simulada. El tiempo de exportación observado fue de
-60–76 ms por frame. El benchmark mide el render CPU y el movimiento de cámara; la
-ventana requiere un display X11/Wayland funcional.
+La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
+(Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la
+órbita simulada. Odyssey→Galaxy durante la transición midió 107.46 FPS. El benchmark
+mide render CPU y movimiento de cámara; la ventana requiere un display X11/Wayland.
 
 Las pruebas unitarias cubren intersección slab, existencia de geometría/materiales y órbita de cámara. El smoke test de exportación headless puede ejecutarse sin display con una resolución pequeña y una ruta temporal:
 
@@ -106,10 +107,16 @@ Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son
 
 ## Estado visual y límites
 
-La segunda revisión visual usa cámaras 3/4 específicas, iluminación key/fill/rim,
-ambiente mínimo, esferas raytraceadas y composiciones nuevas: Odyssey tiene casco rojo,
-cubierta y globo; Galaxy un planetoide y órbita; NSMB Wii castillo, tuberías, bloques y
-monedas. Los PNG medidos y sus métricas están en `artifacts/review-v2/`.
+La revisión visual v3 usa cámaras 3/4 específicas, iluminación key/fill/rim, tone
+mapping y composiciones separadas: Odyssey flota contra el skybox con casco rojo curvo,
+copa, ala clara, globo, barandas y ojo de buey refractivo; Galaxy combina océano,
+continentes, accidentes y órbita inclinada; NSMB Wii muestra puerta, almenas, banderas,
+tuberías, bloques y monedas. Los PNG medidos, hashes y comparación con v2 están en
+`artifacts/review-v3/`; la nueva secuencia está en `artifacts/transition-demo-v3/`.
+
+El dip negro de transición está limitado a 7 %, para que el frame medio siga mostrando
+los dos mundos. La calidad sigue siendo procedural y estilizada: no hay modelos,
+texturas pintadas, antialiasing ni bloom, y no se validó una ventana real sin display/Xvfb.
 
 La estética sigue siendo estilizada y procedural: no hay modelos ni texturas pintadas a
 mano, bloom, antialiasing, ni assets de personajes. Es una mejora de legibilidad y

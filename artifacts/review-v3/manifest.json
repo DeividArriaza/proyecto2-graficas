@@ -1,0 +1,45 @@
+{
+  "base_commit": "38ab6e68a04edfb0411f444bb893ad8aed8c51d9",
+  "renderer": {"profile": "release", "mode": "--headless --output PNG", "resolution": [640, 480]},
+  "review": "v3: visual legibility pass; inspected against review-v2 and transition-demo",
+  "renders": [
+    {
+      "scene": "Mario Odyssey",
+      "path": "artifacts/review-v3/odyssey-640x480.png",
+      "camera": {"target": [0.0, 2.65, 0.15], "distance": 11.1, "azimuth": 0.83, "elevation": 0.46},
+      "render_ms": 18,
+      "sha256": "bcb6190d6689e8d5a7792126b9351a4264f4d67599ae613c455a6a537d126cf3",
+      "framebuffer_hash": "6b381adee9ec1635",
+      "luminance": {"mean": 107.266, "stddev": 22.607, "p05": 76.859, "p95": 130.671, "p95_minus_p05": 53.812},
+      "vs_v2": {"mean_delta": -21.708, "contrast_delta": 1.818}
+    },
+    {
+      "scene": "Mario Galaxy",
+      "path": "artifacts/review-v3/galaxy-640x480.png",
+      "camera": {"target": [0.0, 2.0, 0.0], "distance": 11.8, "azimuth": 0.78, "elevation": 0.42},
+      "render_ms": 15,
+      "sha256": "a809390786701b7fca85052e8c30ef3acf4a085a3f996b6f166e2bbeed453540",
+      "framebuffer_hash": "d989d312f3fa8f4a",
+      "luminance": {"mean": 64.947, "stddev": 17.192, "p05": 52.191, "p95": 71.941, "p95_minus_p05": 19.750},
+      "vs_v2": {"mean_delta": 2.839, "contrast_delta": 0.647}
+    },
+    {
+      "scene": "NSMB Wii",
+      "path": "artifacts/review-v3/nsmb-wii-640x480.png",
+      "camera": {"target": [0.0, 2.6, -1.2], "distance": 12.8, "azimuth": 0.75, "elevation": 0.4},
+      "render_ms": 271,
+      "sha256": "93074e55a79a5b82382404bbe91c921dfceb1bb79edf1c28263a9a5384596c2c",
+      "framebuffer_hash": "6484d506c841b4f6",
+      "luminance": {"mean": 199.051, "stddev": 31.142, "p05": 121.813, "p95": 222.640, "p95_minus_p05": 100.827},
+      "vs_v2": {"mean_delta": 1.380, "contrast_delta": 2.420}
+    }
+  ],
+  "transition": {
+    "path": "artifacts/transition-demo-v3/manifest.json",
+    "resolution": [160, 120],
+    "mid_frame": "frame-02.png",
+    "dip_black_max": 0.07,
+    "hashes_distinct_within_each_transition": true,
+    "final_world": "NSMB Wii"
+  }
+}
