@@ -126,6 +126,49 @@ enum Kind {
     Sand,
     Sandstone,
     Cactus,
+    StuccoTeal,
+    StuccoYellow,
+    StuccoMagenta,
+}
+const MATERIALS: [Kind; 16] = [
+    Kind::Grass,
+    Kind::Planet,
+    Kind::Brick,
+    Kind::Pipe,
+    Kind::Metal,
+    Kind::Cloud,
+    Kind::Dark,
+    Kind::Water,
+    Kind::Star,
+    Kind::Stone,
+    Kind::Sand,
+    Kind::Sandstone,
+    Kind::Cactus,
+    Kind::StuccoTeal,
+    Kind::StuccoYellow,
+    Kind::StuccoMagenta,
+];
+impl Kind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Grass => "grass",
+            Self::Planet => "planet",
+            Self::Brick => "brick",
+            Self::Pipe => "pipe",
+            Self::Metal => "metal",
+            Self::Cloud => "cloud",
+            Self::Dark => "dark",
+            Self::Water => "water",
+            Self::Star => "star",
+            Self::Stone => "stone",
+            Self::Sand => "sand",
+            Self::Sandstone => "sandstone",
+            Self::Cactus => "cactus",
+            Self::StuccoTeal => "stucco-teal",
+            Self::StuccoYellow => "stucco-yellow",
+            Self::StuccoMagenta => "stucco-magenta",
+        }
+    }
 }
 impl Material {
     fn new(
@@ -216,7 +259,7 @@ fn mat(k: Kind) -> Material {
             V::new(1.4, 0.42, 0.03),
         ),
         Kind::Stone => Material::new(k, V::new(0.48, 0.52, 0.6), 0.18, 0.05, 0., 1., V::default()),
-        Kind::Sand => Material::new(k, V::new(0.92, 0.61, 0.28), 0.04, 0., 0., 1., V::default()),
+        Kind::Sand => Material::new(k, V::new(0.89, 0.29, 0.12), 0.04, 0., 0., 1., V::default()),
         Kind::Sandstone => {
             Material::new(k, V::new(0.68, 0.24, 0.12), 0.08, 0., 0., 1., V::default())
         }
@@ -224,6 +267,21 @@ fn mat(k: Kind) -> Material {
             k,
             V::new(0.12, 0.43, 0.19),
             0.15,
+            0.01,
+            0.,
+            1.,
+            V::default(),
+        ),
+        Kind::StuccoTeal => {
+            Material::new(k, V::new(0.02, 0.58, 0.51), 0.10, 0., 0., 1., V::default())
+        }
+        Kind::StuccoYellow => {
+            Material::new(k, V::new(0.98, 0.77, 0.12), 0.06, 0., 0., 1., V::default())
+        }
+        Kind::StuccoMagenta => Material::new(
+            k,
+            V::new(0.73, 0.06, 0.38),
+            0.13,
             0.01,
             0.,
             1.,
@@ -353,7 +411,11 @@ fn texture(m: Material, u: f32, v: f32) -> V {
     let (x, y) = ((u * 8.).floor() as i32, (v * 8.).floor() as i32);
     match m.kind {
         Kind::Brick => {
-            if (x + y) % 2 == 0 {
+            let mortar =
+                (v * 6.).fract() < 0.07 || (u * 4. + (v * 6.).floor() % 2. * 0.5).fract() < 0.05;
+            if mortar {
+                m.albedo * 0.42
+            } else if (x + y) % 2 == 0 {
                 m.albedo * 1.15
             } else {
                 m.albedo * 0.72
@@ -407,6 +469,11 @@ fn texture(m: Material, u: f32, v: f32) -> V {
             let ribs = (u * 28.).sin().abs();
             m.albedo * (0.65 + ribs * 0.35)
         }
+        Kind::StuccoTeal => m.albedo * (0.84 + 0.16 * (u * 83. + v * 61.).sin().abs()),
+        Kind::StuccoYellow => {
+            m.albedo * (0.88 + 0.12 * (u * 113.).sin().abs() * (v * 73.).cos().abs())
+        }
+        Kind::StuccoMagenta => m.albedo * (0.82 + 0.18 * (u * 47. - v * 97.).cos().abs()),
     }
     .clamp()
 }
@@ -415,10 +482,121 @@ fn texture(m: Material, u: f32, v: f32) -> V {
 struct Scene {
     name: &'static str,
     cubes: Vec<Cube>,
+    bvh: Vec<BvhNode>,
     spheres: Vec<Sphere>,
     lights: Vec<(V, V)>,
     yaw: f32,
     sky: u8,
+}
+
+#[derive(Clone)]
+struct BvhNode {
+    min: V,
+    max: V,
+    start: usize,
+    count: usize,
+    children: Option<(usize, usize)>,
+}
+
+fn build_bvh(cubes: &mut [Cube]) -> Vec<BvhNode> {
+    fn build(cubes: &mut [Cube], start: usize, nodes: &mut Vec<BvhNode>) -> usize {
+        let mut min = V::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+        let mut max = -min;
+        for cube in cubes.iter() {
+            min = V::new(
+                min.x.min(cube.min.x),
+                min.y.min(cube.min.y),
+                min.z.min(cube.min.z),
+            );
+            max = V::new(
+                max.x.max(cube.max.x),
+                max.y.max(cube.max.y),
+                max.z.max(cube.max.z),
+            );
+        }
+        let index = nodes.len();
+        nodes.push(BvhNode {
+            min,
+            max,
+            start,
+            count: cubes.len(),
+            children: None,
+        });
+        if cubes.len() > 6 {
+            let extent = max - min;
+            let axis = if extent.x >= extent.y && extent.x >= extent.z {
+                0
+            } else if extent.y >= extent.z {
+                1
+            } else {
+                2
+            };
+            let center = |cube: &Cube| match axis {
+                0 => cube.min.x + cube.max.x,
+                1 => cube.min.y + cube.max.y,
+                _ => cube.min.z + cube.max.z,
+            };
+            cubes.sort_unstable_by(|a, b| center(a).total_cmp(&center(b)));
+            let middle = cubes.len() / 2;
+            let (left, right) = cubes.split_at_mut(middle);
+            let a = build(left, start, nodes);
+            let b = build(right, start + middle, nodes);
+            nodes[index].children = Some((a, b));
+        }
+        index
+    }
+    let mut nodes = Vec::new();
+    if !cubes.is_empty() {
+        build(cubes, 0, &mut nodes);
+    }
+    nodes
+}
+
+fn bounds_hit(min: V, max: V, ray: Ray, limit: f32) -> bool {
+    let (x0, x1) = axis_t(ray.o.x, ray.d.x, min.x, max.x);
+    let (y0, y1) = axis_t(ray.o.y, ray.d.y, min.y, max.y);
+    let (z0, z1) = axis_t(ray.o.z, ray.d.z, min.z, max.z);
+    let enter = x0.max(y0).max(z0);
+    let exit = x1.min(y1).min(z1);
+    exit >= enter && exit >= EPS && enter <= limit
+}
+
+fn nearest_cube(scene: &Scene, ray: Ray, node: usize, best: &mut Option<Hit>) {
+    let bound = &scene.bvh[node];
+    if !bounds_hit(
+        bound.min,
+        bound.max,
+        ray,
+        best.as_ref().map_or(f32::INFINITY, |h| h.t),
+    ) {
+        return;
+    }
+    if let Some((a, b)) = bound.children {
+        nearest_cube(scene, ray, a, best);
+        nearest_cube(scene, ray, b, best);
+    } else {
+        for &cube in &scene.cubes[bound.start..bound.start + bound.count] {
+            if let Some(hit) = hit_cube(cube, ray) {
+                if best.as_ref().is_none_or(|previous| hit.t < previous.t) {
+                    *best = Some(hit);
+                }
+            }
+        }
+    }
+}
+
+fn blocked_by_cube(scene: &Scene, ray: Ray, node: usize, distance: f32) -> bool {
+    let bound = &scene.bvh[node];
+    if !bounds_hit(bound.min, bound.max, ray, distance) {
+        return false;
+    }
+    if let Some((a, b)) = bound.children {
+        blocked_by_cube(scene, ray, a, distance) || blocked_by_cube(scene, ray, b, distance)
+    } else {
+        scene.cubes[bound.start..bound.start + bound.count]
+            .iter()
+            .any(|&cube| hit_cube(cube, ray).is_some_and(|h| h.t <= distance))
+    }
 }
 fn cube(out: &mut Vec<Cube>, center: V, size: V, k: Kind) {
     let h = size * 0.5;
@@ -436,6 +614,107 @@ fn sphere(out: &mut Vec<Sphere>, center: V, radius: f32, k: Kind) {
     });
 }
 
+fn desert_house(out: &mut Vec<Cube>, center: V, cell: f32, body: Kind) {
+    // Painted masonry blocks, not a smooth imported mesh. AABB domes are
+    // stepped roof tiers inspired by Desierto1.png and Desierto2.png.
+    for x in 0..4 {
+        for y in 0..4 {
+            for z in 0..3 {
+                cube(
+                    out,
+                    center
+                        + V::new(
+                            (x as f32 - 1.5) * cell,
+                            (y as f32 + 0.5) * cell,
+                            (z as f32 - 1.) * cell,
+                        ),
+                    V::new(cell - 0.018, cell - 0.018, cell - 0.018),
+                    if y == 3 { Kind::StuccoYellow } else { body },
+                );
+            }
+        }
+    }
+    let front = center.z + cell * 1.5;
+    // Door, inset pane and contrasting white window frames.
+    cube(
+        out,
+        V::new(center.x, center.y + cell, front),
+        V::new(cell * 0.95, cell * 2., 0.08),
+        Kind::Cloud,
+    );
+    cube(
+        out,
+        V::new(center.x, center.y + cell * 0.92, front + 0.05),
+        V::new(cell * 0.70, cell * 1.8, 0.05),
+        Kind::Dark,
+    );
+    for side in [-1., 1.] {
+        let x = center.x + side * cell * 1.2;
+        cube(
+            out,
+            V::new(x, center.y + cell * 2.3, front),
+            V::new(cell * 0.85, cell * 0.9, 0.08),
+            Kind::Cloud,
+        );
+        cube(
+            out,
+            V::new(x, center.y + cell * 2.3, front + 0.06),
+            V::new(cell * 0.60, cell * 0.65, 0.05),
+            Kind::Sandstone,
+        );
+        cube(
+            out,
+            V::new(x, center.y + cell * 2.3, front + 0.095),
+            V::new(0.045, cell * 0.65, 0.02),
+            Kind::Cloud,
+        );
+        cube(
+            out,
+            V::new(x, center.y + cell * 2.3, front + 0.095),
+            V::new(cell * 0.60, 0.045, 0.02),
+            Kind::Cloud,
+        );
+    }
+    // Patterned cornice and the turquoise/yellow stepped dome.
+    for x in 0..8 {
+        cube(
+            out,
+            V::new(
+                center.x + (x as f32 - 3.5) * cell * 0.5,
+                center.y + cell * 3.05,
+                front + 0.04,
+            ),
+            V::new(cell * 0.42, 0.12, 0.08),
+            if x % 2 == 0 {
+                Kind::Cloud
+            } else {
+                Kind::StuccoMagenta
+            },
+        );
+    }
+    for (tier, width) in [(0, 4.4), (1, 3.8), (2, 2.8), (3, 1.6)] {
+        cube(
+            out,
+            center + V::new(0., cell * 4. + (tier as f32 + 0.5) * 0.25, 0.),
+            V::new(cell * width, 0.25, cell * width * 0.8),
+            if tier % 2 == 0 {
+                Kind::StuccoTeal
+            } else {
+                Kind::StuccoYellow
+            },
+        );
+    }
+    // Low front step made from three separate blocks.
+    for x in [-1., 0., 1.] {
+        cube(
+            out,
+            V::new(center.x + x * cell, 0.58, front + cell * 0.55),
+            V::new(cell - 0.02, 0.22, cell),
+            Kind::Sandstone,
+        );
+    }
+}
+
 fn sand_kingdom(out: &mut Vec<Cube>) {
     // A finite square cutaway, with the ship resting on its sandy surface.
     // Horizontal strata make the sides read as a miniature terrain block.
@@ -443,22 +722,36 @@ fn sand_kingdom(out: &mut Vec<Cube>) {
         (-1.25, 0.55, Kind::Sandstone),
         (-0.75, 0.45, Kind::Sand),
         (-0.30, 0.45, Kind::Sandstone),
-        (0.22, 0.50, Kind::Sand),
+        (0.12, 0.30, Kind::Sand),
     ] {
         cube(out, V::new(0., y, 0.), V::new(12., height, 12.), kind);
     }
+    // Visible seams between a coherent grid of terrain blocks (2 world units).
+    for x in 0..6 {
+        for z in 0..6 {
+            cube(
+                out,
+                V::new(-5. + x as f32 * 2., 0.37, -5. + z as f32 * 2.),
+                V::new(1.97, 0.20, 1.97),
+                Kind::Sand,
+            );
+        }
+    }
+
+    desert_house(out, V::new(-4.7, 0.47, 0.), 0.55, Kind::StuccoTeal);
+    desert_house(out, V::new(3.65, 0.47, -4.1), 0.50, Kind::StuccoMagenta);
 
     // Stepped ruin and broken columns along the rear edge, behind the ship.
-    for tier in 0..4 {
-        let width = 3.8 - tier as f32 * 0.8;
+    for tier in 0..3 {
+        let width = 1.8 - tier as f32 * 0.5;
         cube(
             out,
-            V::new(-3.5, 0.77 + tier as f32 * 0.6, -3.9),
+            V::new(-1.8, 0.77 + tier as f32 * 0.6, -4.7),
             V::new(width, 0.6, width),
             Kind::Sandstone,
         );
     }
-    for (x, height) in [(0.4, 1.7), (2.0, 2.3)] {
+    for (x, height) in [(-0.6, 1.3), (0.6, 1.7)] {
         cube(
             out,
             V::new(x, 0.60, -4.4),
@@ -480,7 +773,7 @@ fn sand_kingdom(out: &mut Vec<Cube>) {
     }
 
     // Two branched voxel cacti frame the deck without covering the headlight.
-    for (x, z, height) in [(-4.7, 1.6, 1.9), (4.5, -2.8, 2.5)] {
+    for (x, z, height) in [(-5., -3.2, 1.9), (4.8, -1.4, 2.5)] {
         cube(
             out,
             V::new(x, 0.47 + height * 0.5, z),
@@ -503,7 +796,7 @@ fn sand_kingdom(out: &mut Vec<Cube>) {
         }
     }
     // Small dunes and scattered ruin fragments remain inside the square base.
-    for (x, z) in [(-4.4, 4.5), (3.8, 4.3), (4.8, 0.2)] {
+    for (x, z) in [(-0.6, 4.5), (3.8, 4.3), (4.8, 0.2)] {
         cube(out, V::new(x, 0.58, z), V::new(1.4, 0.22, 1.1), Kind::Sand);
         cube(out, V::new(x, 0.75, z), V::new(0.8, 0.15, 0.6), Kind::Sand);
     }
@@ -513,6 +806,43 @@ fn sand_kingdom(out: &mut Vec<Cube>) {
         V::new(0.6, 0.36, 0.45),
         Kind::Sandstone,
     );
+    // A small oasis: patterned pool floor behind a refractive water block.
+    for x in 0..4 {
+        for z in 0..3 {
+            cube(
+                out,
+                V::new(-4.7 + x as f32 * 0.5, 0.50, 3.0 + z as f32 * 0.5),
+                V::new(0.48, 0.06, 0.48),
+                if (x + z) % 2 == 0 {
+                    Kind::Cloud
+                } else {
+                    Kind::StuccoTeal
+                },
+            );
+        }
+    }
+    cube(
+        out,
+        V::new(-3.95, 0.63, 3.5),
+        V::new(2., 0.20, 1.5),
+        Kind::Water,
+    );
+    for z in [2.6, 4.4] {
+        cube(
+            out,
+            V::new(-3.95, 0.58, z),
+            V::new(2.35, 0.22, 0.20),
+            Kind::Sandstone,
+        );
+    }
+    for x in [-5.12, -2.78] {
+        cube(
+            out,
+            V::new(x, 0.58, 3.5),
+            V::new(0.20, 0.22, 2.),
+            Kind::Sandstone,
+        );
+    }
 }
 fn scene(id: usize) -> Scene {
     let mut c = Vec::new();
@@ -962,9 +1292,11 @@ fn scene(id: usize) -> Scene {
             (V::new(0., 7., -5.), V::new(0.65, 0.25, 0.16)),
         ],
     };
+    let bvh = build_bvh(&mut c);
     Scene {
         name,
         cubes: c,
+        bvh,
         spheres,
         lights,
         yaw: 0.,
@@ -1053,25 +1385,21 @@ fn nearest(scene: &Scene, r: Ray) -> Option<Hit> {
         d: ry(r.d, -scene.yaw),
     };
     let mut best = None;
-    for &c in &scene.cubes {
-        if let Some(mut h) = hit_cube(c, local) {
-            if best.as_ref().is_none_or(|b: &Hit| h.t < b.t) {
-                h.point = ry(h.point, scene.yaw);
-                h.normal = ry(h.normal, scene.yaw);
-                best = Some(h);
-            }
-        }
+    if !scene.bvh.is_empty() {
+        nearest_cube(scene, local, 0, &mut best);
     }
     for &s in &scene.spheres {
-        if let Some(mut h) = hit_sphere(s, local) {
+        if let Some(h) = hit_sphere(s, local) {
             if best.as_ref().is_none_or(|b: &Hit| h.t < b.t) {
-                h.point = ry(h.point, scene.yaw);
-                h.normal = ry(h.normal, scene.yaw);
                 best = Some(h);
             }
         }
     }
-    best
+    best.map(|mut h| {
+        h.point = ry(h.point, scene.yaw);
+        h.normal = ry(h.normal, scene.yaw);
+        h
+    })
 }
 fn visible(scene: &Scene, p: V, l: V) -> bool {
     let d = l - p;
@@ -1082,18 +1410,11 @@ fn visible(scene: &Scene, p: V, l: V) -> bool {
     };
     let distance = d.len();
     // Shadow rays only need one blocker, not the nearest shaded intersection.
-    !scene.cubes.iter().any(|&cube| {
-        let (x0, x1) = axis_t(ray.o.x, ray.d.x, cube.min.x, cube.max.x);
-        let (y0, y1) = axis_t(ray.o.y, ray.d.y, cube.min.y, cube.max.y);
-        let (z0, z1) = axis_t(ray.o.z, ray.d.z, cube.min.z, cube.max.z);
-        let enter = x0.max(y0).max(z0);
-        let exit = x1.min(y1).min(z1);
-        let t = if enter > EPS { enter } else { exit };
-        exit >= enter && exit >= EPS && t <= distance
-    }) && !scene
-        .spheres
-        .iter()
-        .any(|&sphere| hit_sphere(sphere, ray).is_some_and(|hit| hit.t <= distance))
+    !(!scene.bvh.is_empty() && blocked_by_cube(scene, ray, 0, distance))
+        && !scene
+            .spheres
+            .iter()
+            .any(|&sphere| hit_sphere(sphere, ray).is_some_and(|hit| hit.t <= distance))
 }
 fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
     let Some(h) = nearest(scene, r) else {
@@ -1284,6 +1605,18 @@ fn render_frame(
     fade: f32,
     buffer: &mut [u32],
 ) -> io::Result<(u128, V)> {
+    render_frame_mode(scene, cam, w, h, fade, buffer, None)
+}
+
+fn render_frame_mode(
+    scene: &Scene,
+    cam: &Camera,
+    w: u32,
+    h: u32,
+    fade: f32,
+    buffer: &mut [u32],
+    inspection: Option<Kind>,
+) -> io::Result<(u128, V)> {
     let started = Instant::now();
     let row_avgs: Vec<V> = buffer
         .par_chunks_mut(w as usize)
@@ -1291,7 +1624,12 @@ fn render_frame(
         .map(|(y, row)| {
             let mut avg = V::default();
             for (x, dst) in row.iter_mut().enumerate() {
-                let c = trace(scene, cam.ray(x as u32, y as u32, w, h), 0) * fade;
+                let ray = cam.ray(x as u32, y as u32, w, h);
+                let c = if let Some(kind) = inspection {
+                    inspect_ray(scene, ray, kind)
+                } else {
+                    trace(scene, ray, 0)
+                } * fade;
                 avg += c;
                 *dst = pixel(c);
             }
@@ -1300,6 +1638,48 @@ fn render_frame(
         .collect();
     let avg = row_avgs.into_iter().fold(V::default(), |a, b| a + b);
     Ok((started.elapsed().as_millis(), avg / (w * h) as f32))
+}
+
+fn inspect_ray(scene: &Scene, ray: Ray, selected: Kind) -> V {
+    let Some(hit) = nearest(scene, ray) else {
+        return V::new(0.08, 0.10, 0.13);
+    };
+    let shade = 0.35 + 0.65 * hit.normal.dot(V::new(-0.4, 0.8, 0.5).norm()).max(0.);
+    if hit.material.kind != selected {
+        return V::new(0.20, 0.22, 0.24) * shade;
+    }
+    if hit.u < 0.035 || hit.u > 0.965 || hit.v < 0.035 || hit.v > 0.965 {
+        V::new(1., 0.70, 0.05)
+    } else {
+        texture(hit.material, hit.u, hit.v) * shade
+    }
+}
+
+fn scene_materials(scene: &Scene) -> Vec<Kind> {
+    MATERIALS
+        .iter()
+        .copied()
+        .filter(|kind| {
+            scene.cubes.iter().any(|cube| cube.material.kind == *kind)
+                || scene
+                    .spheres
+                    .iter()
+                    .any(|sphere| sphere.material.kind == *kind)
+        })
+        .collect()
+}
+
+fn inspection_title(scene: &Scene, selected: Option<Kind>) -> String {
+    if let Some(kind) = selected {
+        let m = mat(kind);
+        format!("{} | {} | albedo={:.2},{:.2},{:.2} spec={:.2} transparencia={:.2} reflejo={:.2} | Tab: siguiente, M: salir",
+            scene.name, kind.name(), m.albedo.x, m.albedo.y, m.albedo.z, m.specular, m.transparency, m.reflect)
+    } else {
+        format!(
+            "{} | M: inspeccionar materiales | N: siguiente mundo",
+            scene.name
+        )
+    }
 }
 
 fn scale_letterboxed(
@@ -1439,9 +1819,19 @@ fn frame_metrics(buffer: &[u32]) -> FrameMetrics {
     }
 }
 
-fn export_render(scene: &Scene, cam: &Camera, w: u32, h: u32, output: &Path) -> io::Result<()> {
+fn export_render(
+    scene: &Scene,
+    cam: &Camera,
+    w: u32,
+    h: u32,
+    output: &Path,
+    inspection: Option<Kind>,
+) -> io::Result<()> {
     let mut buffer = vec![0; (w * h) as usize];
-    let (ms, avg) = render_frame(scene, cam, w, h, 1., &mut buffer)?;
+    let (ms, avg) = render_frame_mode(scene, cam, w, h, 1., &mut buffer, inspection)?;
+    if inspection.is_some() {
+        println!("INSPECTION {}", inspection_title(scene, inspection));
+    }
     if output
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
@@ -1607,7 +1997,8 @@ fn usage() {
     println!("Exportación: cargo run -- --headless --scene 0 --output render.ppm [--width N] [--height N]");
     println!("Benchmark: cargo run --release -- --benchmark --scene 0 [--width N] [--height N]");
     println!("Demo headless: cargo run -- --transition-demo DIR [--width N] [--height N]");
-    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, N/1/2/3 cambiar escena, Escape salir.");
+    println!("Inspección: --inspect-material sand|metal|water|stucco-teal (con --headless y --output, o interactivo)");
+    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, M inspeccionar, Tab siguiente material, N/1/2/3 cambiar escena, Escape salir.");
 }
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -1622,6 +2013,7 @@ fn main() -> io::Result<()> {
     let mut headless = false;
     let mut do_benchmark = false;
     let mut demo_dir = None;
+    let mut inspection = None;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -1648,12 +2040,35 @@ fn main() -> io::Result<()> {
                 demo_dir = Some(args[i].clone())
             }
             "--interactive" => headless = false,
+            "--inspect-material" => {
+                i += 1;
+                let name = args.get(i).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "--inspect-material requiere un nombre",
+                    )
+                })?;
+                inspection = Some(
+                    *MATERIALS
+                        .iter()
+                        .find(|kind| kind.name() == name)
+                        .ok_or_else(|| {
+                            io::Error::new(io::ErrorKind::InvalidInput, "material desconocido")
+                        })?,
+                );
+            }
             _ => {}
         }
         i += 1;
     }
     let mut cam = default_camera(id);
     let mut s = scene(id);
+    if inspection.is_some_and(|kind| !scene_materials(&s).contains(&kind)) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "el material no existe en esta escena",
+        ));
+    }
     if do_benchmark {
         return benchmark(&s, &cam, w, h);
     }
@@ -1667,7 +2082,7 @@ fn main() -> io::Result<()> {
                 "--headless requiere --output; no se crea render.ppm por defecto",
             ));
         };
-        export_render(&s, &cam, w, h, Path::new(&output))?;
+        export_render(&s, &cam, w, h, Path::new(&output), inspection)?;
         return Ok(());
     }
     let mut window = Window::new(
@@ -1686,6 +2101,7 @@ fn main() -> io::Result<()> {
     )
     .map_err(|error| io::Error::other(error.to_string()))?;
     window.set_target_fps(60);
+    window.set_title(&inspection_title(&s, inspection));
     let mut buffer = vec![0; (w * h) as usize];
     let mut presentation = Vec::new();
     let mut presented_size = (0, 0);
@@ -1700,6 +2116,27 @@ fn main() -> io::Result<()> {
         let dt = elapsed.as_secs_f32().min(0.1);
         last_tick = now;
         if transition.is_none() {
+            if window.is_key_pressed(Key::M, KeyRepeat::No) {
+                inspection = if inspection.is_some() {
+                    None
+                } else {
+                    scene_materials(&s).first().copied()
+                };
+                window.set_title(&inspection_title(&s, inspection));
+                println!("{}", inspection_title(&s, inspection));
+                dirty = true;
+            }
+            if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
+                if let Some(kind) = inspection {
+                    let kinds = scene_materials(&s);
+                    let next =
+                        (kinds.iter().position(|k| *k == kind).unwrap_or(0) + 1) % kinds.len();
+                    inspection = Some(kinds[next]);
+                    window.set_title(&inspection_title(&s, inspection));
+                    println!("{}", inspection_title(&s, inspection));
+                    dirty = true;
+                }
+            }
             if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
                 cam.az -= 1.8 * dt;
                 dirty = true;
@@ -1735,6 +2172,7 @@ fn main() -> io::Result<()> {
         if transition.is_none() {
             if let Some(next_id) = requested_world(id, requested) {
                 if next_id != id {
+                    inspection = None;
                     transition = Some(WorldTransition::from_view(id, next_id, cam, s.yaw));
                     transition_started = Instant::now();
                 }
@@ -1764,13 +2202,14 @@ fn main() -> io::Result<()> {
                 id = active.to;
                 s = scene(id);
                 cam = default_camera(id);
+                window.set_title(&inspection_title(&s, None));
                 dirty = false;
                 transition = None;
             } else {
                 transition = Some(active);
             }
         } else if dirty {
-            render_frame(&s, &cam, w, h, 1., &mut buffer)?;
+            render_frame_mode(&s, &cam, w, h, 1., &mut buffer, inspection)?;
             presented_size = present_frame(
                 &mut window,
                 &buffer,
@@ -1997,9 +2436,12 @@ mod tests {
             max: V::new(0.5, 0.5, 3.),
             material: mat(Kind::Stone),
         };
+        let mut cubes = vec![blocker];
+        let bvh = build_bvh(&mut cubes);
         let scene = Scene {
             name: "test",
-            cubes: vec![blocker],
+            cubes,
+            bvh,
             spheres: vec![],
             lights: vec![(V::new(0., 0., 5.), V::new(1., 1., 1.))],
             yaw: 0.,
@@ -2007,6 +2449,65 @@ mod tests {
         };
         assert!(!visible(&scene, V::new(0., 0., 0.), V::new(0., 0., 5.)));
         assert!(visible(&scene, V::new(2., 0., 0.), V::new(0., 0., 5.)));
+    }
+
+    #[test]
+    fn accelerated_hits_and_shadows_match_linear_queries() {
+        for id in 0..3 {
+            let mut scene = scene(id);
+            scene.yaw = 0.43;
+            let camera = default_camera(id);
+            for y in 0..24 {
+                for x in 0..32 {
+                    let ray = camera.ray(x, y, 32, 24);
+                    let local = Ray {
+                        o: ry(ray.o, -scene.yaw),
+                        d: ry(ray.d, -scene.yaw),
+                    };
+                    let reference = scene
+                        .cubes
+                        .iter()
+                        .filter_map(|&cube| hit_cube(cube, local))
+                        .chain(
+                            scene
+                                .spheres
+                                .iter()
+                                .filter_map(|&sphere| hit_sphere(sphere, local)),
+                        )
+                        .min_by(|a, b| a.t.total_cmp(&b.t));
+                    let accelerated = nearest(&scene, ray);
+                    assert_eq!(accelerated.is_some(), reference.is_some());
+                    if let (Some(a), Some(b)) = (accelerated, reference) {
+                        assert!((a.t - b.t).abs() < EPS);
+                        assert_eq!(a.material.kind, b.material.kind);
+                        for &(light, _) in &scene.lights {
+                            let delta = light - a.point;
+                            let shadow = Ray {
+                                o: a.point + delta.norm() * EPS * 4.,
+                                d: delta.norm(),
+                            };
+                            assert_eq!(
+                                visible(&scene, a.point, light),
+                                nearest(&scene, shadow).is_none_or(|h| h.t > delta.len())
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn material_inspection_distinguishes_selection_from_context() {
+        let scene = scene(0);
+        assert!(scene_materials(&scene).contains(&Kind::StuccoTeal));
+        let camera = default_camera(0);
+        let mut sand = vec![0; 64 * 48];
+        let mut metal = sand.clone();
+        render_frame_mode(&scene, &camera, 64, 48, 1., &mut sand, Some(Kind::Sand)).unwrap();
+        render_frame_mode(&scene, &camera, 64, 48, 1., &mut metal, Some(Kind::Metal)).unwrap();
+        assert_ne!(framebuffer_hash(&sand), framebuffer_hash(&metal));
+        assert!(inspection_title(&scene, Some(Kind::Water)).contains("transparencia=0.62"));
     }
 
     #[test]

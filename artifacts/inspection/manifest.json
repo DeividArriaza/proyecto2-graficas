@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-01",
+  "scene": "Mario Odyssey",
+  "mode": "material inspection (diagnostic, not physical shading)",
+  "width": 640,
+  "height": 480,
+  "hash_algorithm": "framebuffer_hash RGB888 u32",
+  "frames": [
+    {"material": "sand", "file": "sand.png", "hash": "5ef43f0b3a3e7ad5"},
+    {"material": "stucco-teal", "file": "stucco-teal.png", "hash": "57306f7f378bd1f1"},
+    {"material": "brick", "file": "brick.png", "hash": "a75a497f919ef4d2"},
+    {"material": "metal", "file": "metal.png", "hash": "ff3fb1025577b616"},
+    {"material": "water", "file": "water.png", "hash": "7afbf01bad2f377d"}
+  ]
+}

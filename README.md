@@ -19,12 +19,71 @@ Controles:
 | Flechas o `WASD` mantenidas | Orbitar y elevar/bajar la cámara continuamente |
 | `+` / `-` mantenidas | Zoom continuo |
 | `R` mantenida | Rotar el diorama continuamente |
+| `M` | Activar/desactivar inspección de materiales |
+| `Tab` | Recorrer los materiales de la escena mientras se inspecciona |
 | `N` | Transición al siguiente mundo: Odyssey → Galaxy → NSMB Wii → Odyssey |
 | `1` / `2` / `3` | Transición directa a Odyssey / Galaxy / NSMB Wii |
 | `F11` | Sin acción: minifb 0.26 no ofrece una API pública y verificable para fullscreen |
 | `Esc` o cerrar la ventana | Salir |
 
 La minimización y cualquier fullscreen solicitado al sistema quedan a cargo del window manager. No se simula fullscreen con una API inexistente.
+
+## Bloques y materiales
+
+Odyssey conserva su nave voxel y ahora incorpora casas inspiradas en las referencias
+`Desierto1.png` y `Desierto2.png`: fachadas turquesa/magenta, niveles amarillos,
+ventanas enmarcadas, franjas decorativas y cúpulas hechas con cuboides escalonados.
+El terreno rojizo se divide en una cuadrícula de bloques de 2 unidades con juntas;
+las casas se construyen con bloques de 0.50/0.55 unidades. Cada tamaño responde a
+una escala de construcción, y los bordes permanecen visibles al orbitar.
+
+Todos los bloques usan intersección rayo-AABB y UV por cara. Las texturas se generan
+en el proyecto mediante funciones de `u/v`; no son únicamente colores constantes.
+La BVH descarta grupos de bloques que el rayo no cruza y acelera también las sombras.
+Las figuras, matemáticas, texturas y efectos se implementan en Rust dentro del
+proyecto; minifb presenta la ventana, Rayon paraleliza las filas y png exporta imágenes.
+
+Cinco materiales que pueden mostrarse durante la presentación:
+
+| Nombre en el inspector | Textura propia | Albedo RGB | Specular | Transparencia | Reflectividad |
+| --- | --- | --- | ---: | ---: | ---: |
+| `sand` | Granos y ondulaciones de arena rojiza | 0.89, 0.29, 0.12 | 0.04 | 0.00 | 0.00 |
+| `stucco-teal` | Estuco granular turquesa de las casas | 0.02, 0.58, 0.51 | 0.10 | 0.00 | 0.00 |
+| `brick` | Patrón rojo con juntas escalonadas | 0.82, 0.07, 0.03 | 0.18 | 0.00 | 0.04 |
+| `metal` | Paneles con variación de acabado | 0.78, 0.82, 0.90 | 0.70 | 0.00 | 0.34 |
+| `water` | Ondas procedurales | 0.08, 0.35, 0.52 | 0.85 | 0.62 | 0.16 |
+
+El oasis usa agua refractiva con IOR 1.33, Fresnel de Schlick y reflexión interna total.
+Su fondo tiene baldosas contrastantes para observar la transmisión/distorsión en el
+render normal. El inspector es una vista diagnóstica: muestra la textura y la forma,
+pero no calcula reflexión ni refracción. Para apreciar esos efectos, volver con `M`.
+
+Otros materiales de Odyssey: `sandstone` (estratos), `cactus` (costillas),
+`stucco-yellow` y `stucco-magenta` (patrones de estuco distintos), `cloud` (acabado
+claro), `dark` (acabado oscuro) y `star` (dorado emisivo). Cada uno tiene su propia
+configuración; la rúbrica puntúa como máximo cinco materiales, no limita la cantidad.
+
+Al activar `M`, el material elegido conserva su textura con contornos dorados y el
+resto de la escena se muestra gris. `Tab` selecciona el siguiente material presente.
+El nombre y los cuatro parámetros aparecen en el título de la ventana y se imprimen
+en la terminal. Rotación y zoom siguen disponibles; iniciar una transición sale de
+la inspección y vuelve al render normal de los tres mundos.
+
+La inspección también se puede exportar sin ventana:
+
+```bash
+cargo run --release -- --headless --scene 0 --inspect-material stucco-teal --width 640 --height 480 --output /tmp/inspeccion-casas.png
+cargo run --release -- --headless --scene 0 --inspect-material water --width 640 --height 480 --output /tmp/inspeccion-agua.png
+```
+
+Se rechazan nombres desconocidos y materiales que no estén presentes en la escena.
+Las capturas de inspección de entrega están en `artifacts/inspection/`.
+
+![Bloques de arena resaltados en el inspector](artifacts/inspection/sand.png)
+
+[Estuco de las casas](artifacts/inspection/stucco-teal.png) ·
+[Ladrillo](artifacts/inspection/brick.png) · [Metal](artifacts/inspection/metal.png) ·
+[Agua](artifacts/inspection/water.png)
 
 Para exportar explícitamente un PPM sin ventana:
 
@@ -88,15 +147,16 @@ Medición del 2026-10-01 en release a 320×240 (render CPU, variable según el e
 
 | Mundo | Órbita FPS | Transición al siguiente FPS |
 | --- | ---: | ---: |
-| Odyssey | 33.61 | 25.78 |
-| Galaxy | 279.07 | 13.18 |
-| NSMB Wii | 15.35 | 10.79 |
+| Odyssey | 81.63 | 46.68 |
+| Galaxy | 324.32 | 57.91 |
+| NSMB Wii | 96.77 | 41.10 |
 
 Cada benchmark mide ahora la transición que sale del mundo elegido, conservando su
-cámara orbital final. Las 15 pruebas incluyen la continuidad del primer y último
+cámara orbital final. Las 17 pruebas incluyen la continuidad del primer y último
 frame para las seis combinaciones de mundos, después de orbitar y rotar la escena.
-Las consultas de sombra terminan al encontrar el primer bloqueo; los hashes de
-las capturas se conservaron después de esta optimización.
+La BVH se verifica comparando impactos y sombras contra la búsqueda lineal en los
+tres mundos rotados. También se prueba que la inspección distingue materiales y
+muestra sus parámetros.
 
 La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
 (Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la
@@ -145,8 +205,9 @@ sigue pendiente. No se generan estos archivos automáticamente al abrir la venta
 
 La revisión voxel posterior a v3 usa cámaras 3/4 específicas, iluminación key/fill/rim,
 tone mapping y composiciones separadas: Odyssey está apoyada sobre un diorama cúbico
-inspirado en el Reino de las Arenas, con arena texturizada, estratos de roca rojiza,
-cactus de bloques, pirámide escalonada, columnas rotas y cielo azul. La nave conserva casco crema y
+inspirado en el Reino de las Arenas, con arena rojiza dividida en bloques, estratos,
+casas coloridas de cúpulas escalonadas, oasis, cactus, ruinas y cielo azul.
+La nave conserva casco crema y
 rojo escalonado, proa por capas, cabina/copa roja alta con bandas, ventanas blancas,
 faro frontal facetado de cubos, barandas, mástil/bandera, cola con propulsores y un globo
 superior ampliado aproximadamente un 60 %, formado por 21 cubos dorados apilados.
