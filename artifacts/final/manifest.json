@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-01",
+  "width": 640,
+  "height": 480,
+  "mode": "headless release",
+  "hash_algorithm": "framebuffer_hash RGB888 u32",
+  "frames": [
+    {"scene": 0, "file": "odyssey.png", "hash": "a36ae813e917c7d9", "render_ms": 135},
+    {"scene": 1, "file": "galaxy.png", "hash": "d989d312f3fa8f4a", "render_ms": 15},
+    {"scene": 2, "file": "nsmb-wii.png", "hash": "6484d506c841b4f6", "render_ms": 302}
+  ],
+  "benchmark_resolution": [320, 240],
+  "benchmark": [
+    {"scene": 0, "orbit_fps": 33.61, "transition_fps": 25.78, "transition_to": 1},
+    {"scene": 1, "orbit_fps": 279.07, "transition_fps": 13.18, "transition_to": 2},
+    {"scene": 2, "orbit_fps": 15.35, "transition_fps": 10.79, "transition_to": 0}
+  ]
+}

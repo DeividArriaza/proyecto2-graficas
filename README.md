@@ -7,7 +7,7 @@ Renderer de CPU en Rust para tres dioramas: Mario Odyssey, Mario Galaxy y NSMB W
 El comportamiento normal abre una ventana interactiva y la mantiene activa hasta cerrarla:
 
 ```bash
-cargo run
+cargo run --release
 ```
 
 El framebuffer se renderiza en paralelo por filas y se presenta después de cada frame. El render interno predeterminado es `320×240` y se escala a una ventana inicial de `1280×960`; la ventana es redimensionable y conserva la proporción con franjas negras mediante un escalador propio. Esto evita un fallo de `AspectRatioStretch` en el backend Wayland de minifb 0.26. No se crea ningún `render.ppm` al ejecutar así.
@@ -59,7 +59,11 @@ La ventana rerenderiza cuando cambia la cámara o la escena; las teclas mantenid
 delta-time para movimiento continuo. `WorldTransition` conserva explícitamente mundo
 origen/destino, progreso acotado `0..1`, cámara interpolada y duración fija de **0.8 s**.
 Cada frame renderiza ambos mundos, aplica easing smoothstep y compone sus framebuffers con
-crossfade y un fundido a negro leve; no hay salto instantáneo. Mientras una transición está
+crossfade y un fundido a negro leve. La transición captura la cámara y la rotación actuales
+al salir, de modo que orbitar, hacer zoom o girar antes de cambiar mundo no causa un
+salto a la vista predeterminada. Durante la transición se suspende el control de cámara
+y se usa el tiempo transcurrido real, sin el límite de delta-time del movimiento manual.
+Mientras una transición está
 activa, `N` y `1/2/3` se ignoran de forma determinista (no se encolan ni reinician); al
 terminar, el mundo destino queda activo. Esc sigue cerrando la ventana y no se genera
 `render.ppm` por defecto.
@@ -76,7 +80,23 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 cargo build --release
 cargo run --release -- --benchmark --scene 0 --width 320 --height 240
+cargo run --release -- --benchmark --scene 1 --width 320 --height 240
+cargo run --release -- --benchmark --scene 2 --width 320 --height 240
 ```
+
+Medición del 2026-10-01 en release a 320×240 (render CPU, variable según el equipo):
+
+| Mundo | Órbita FPS | Transición al siguiente FPS |
+| --- | ---: | ---: |
+| Odyssey | 33.61 | 25.78 |
+| Galaxy | 279.07 | 13.18 |
+| NSMB Wii | 15.35 | 10.79 |
+
+Cada benchmark mide ahora la transición que sale del mundo elegido, conservando su
+cámara orbital final. Las 15 pruebas incluyen la continuidad del primer y último
+frame para las seis combinaciones de mundos, después de orbitar y rotar la escena.
+Las consultas de sombra terminan al encontrar el primer bloqueo; los hashes de
+las capturas se conservaron después de esta optimización.
 
 La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
 (Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la
@@ -96,22 +116,30 @@ cargo run -- --headless --width 32 --height 24 --output "$tmpdir/smoke.ppm"
 test -s "$tmpdir/smoke.ppm"
 ```
 
-Para validar la transición sin display se puede generar una secuencia pequeña de diez
-PNG (inicio, tres puntos intermedios y final para Odyssey→Galaxy y Galaxy→NSMB Wii) junto
+Para validar el ciclo sin display se puede generar una secuencia de quince
+PNG (inicio, tres puntos intermedios y final para cada una de las tres transiciones) junto
 con hashes, tiempos de render y FPS:
 
 ```bash
-cargo run --release -- --transition-demo artifacts/transition-demo --width 96 --height 72
+cargo run --release -- --transition-demo /tmp/proyecto2-transition-cycle --width 96 --height 72
 ```
 
-El manifest queda en `artifacts/transition-demo/manifest.json`; los hashes de los frames
-intermedios deben ser distintos y el último frame declara `NSMB Wii` como mundo final.
+La secuencia de entrega está en `artifacts/transition-cycle/manifest.json`; los hashes
+intermedios son distintos dentro de cada transición y el último frame declara
+`Mario Odyssey` como mundo final. Los frames extremos coinciden entre transiciones
+consecutivas. La ruta del ejemplo genera otra revisión en `/tmp`.
 Para medir rendimiento, `--benchmark` imprime tanto el FPS de órbita continua como
 `TRANSITION_BENCHMARK` para el crossfade. En el benchmark release de 320×240 se exige
 mantener al menos 10 FPS en órbita; la transición mide por separado sus dos renders por
 frame. No se declara una ventana real validada cuando no hay display/Xvfb disponible.
 
-Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son generados automáticamente por `cargo run`.
+Las capturas actuales están en `artifacts/final/`, con hashes y mediciones en su
+`manifest.json`. El GIF anterior es histórico; el video de demostración actualizado
+sigue pendiente. No se generan estos archivos automáticamente al abrir la ventana.
+
+![Odyssey en el Reino de las Arenas](artifacts/final/odyssey.png)
+
+[Captura Galaxy](artifacts/final/galaxy.png) · [Captura NSMB Wii](artifacts/final/nsmb-wii.png)
 
 ## Estado visual y límites
 

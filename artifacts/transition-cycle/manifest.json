@@ -1,0 +1,24 @@
+{
+  "duration_seconds": 0.8,
+  "input_during_transition": "ignored",
+  "frames": [
+    {"file":"frame-00.png","from":"Mario Odyssey","to":"Mario Galaxy","elapsed_ms":0,"render_ms":3,"hash":"e4a05b4430d19563"},
+    {"file":"frame-01.png","from":"Mario Odyssey","to":"Mario Galaxy","elapsed_ms":200,"render_ms":3,"hash":"16de057a973df670"},
+    {"file":"frame-02.png","from":"Mario Odyssey","to":"Mario Galaxy","elapsed_ms":400,"render_ms":3,"hash":"ff10fb1ef4518f9a"},
+    {"file":"frame-03.png","from":"Mario Odyssey","to":"Mario Galaxy","elapsed_ms":600,"render_ms":4,"hash":"28189a1b6ca80ada"},
+    {"file":"frame-04.png","from":"Mario Odyssey","to":"Mario Galaxy","elapsed_ms":800,"render_ms":3,"hash":"4d738d8c77d63e39"},
+    {"file":"frame-05.png","from":"Mario Galaxy","to":"NSMB Wii","elapsed_ms":0,"render_ms":7,"hash":"4d738d8c77d63e39"},
+    {"file":"frame-06.png","from":"Mario Galaxy","to":"NSMB Wii","elapsed_ms":200,"render_ms":7,"hash":"900708e95b17678b"},
+    {"file":"frame-07.png","from":"Mario Galaxy","to":"NSMB Wii","elapsed_ms":400,"render_ms":7,"hash":"d767a57e7ab57ad0"},
+    {"file":"frame-08.png","from":"Mario Galaxy","to":"NSMB Wii","elapsed_ms":600,"render_ms":7,"hash":"763787d4e1ceee8e"},
+    {"file":"frame-09.png","from":"Mario Galaxy","to":"NSMB Wii","elapsed_ms":800,"render_ms":7,"hash":"9cc225d50b7e5e66"},
+    {"file":"frame-10.png","from":"NSMB Wii","to":"Mario Odyssey","elapsed_ms":0,"render_ms":10,"hash":"9cc225d50b7e5e66"},
+    {"file":"frame-11.png","from":"NSMB Wii","to":"Mario Odyssey","elapsed_ms":200,"render_ms":10,"hash":"50906391ae98a49f"},
+    {"file":"frame-12.png","from":"NSMB Wii","to":"Mario Odyssey","elapsed_ms":400,"render_ms":9,"hash":"ff7bb892d821e24c"},
+    {"file":"frame-13.png","from":"NSMB Wii","to":"Mario Odyssey","elapsed_ms":600,"render_ms":8,"hash":"818e7fa9c887fdd8"},
+    {"file":"frame-14.png","from":"NSMB Wii","to":"Mario Odyssey","elapsed_ms":800,"render_ms":8,"hash":"e4a05b4430d19563"}
+  ],
+  "hashes_distinct_within_each_transition": true,
+  "fps": 156.25,
+  "final_world": "Mario Odyssey"
+}

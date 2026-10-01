@@ -972,7 +972,7 @@ fn scene(id: usize) -> Scene {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Camera {
     target: V,
     distance: f32,
@@ -1075,14 +1075,25 @@ fn nearest(scene: &Scene, r: Ray) -> Option<Hit> {
 }
 fn visible(scene: &Scene, p: V, l: V) -> bool {
     let d = l - p;
-    nearest(
-        scene,
-        Ray {
-            o: p + d.norm() * EPS * 4.,
-            d: d.norm(),
-        },
-    )
-    .is_none_or(|h| h.t > d.len())
+    let direction = d.norm();
+    let ray = Ray {
+        o: ry(p + direction * EPS * 4., -scene.yaw),
+        d: ry(direction, -scene.yaw),
+    };
+    let distance = d.len();
+    // Shadow rays only need one blocker, not the nearest shaded intersection.
+    !scene.cubes.iter().any(|&cube| {
+        let (x0, x1) = axis_t(ray.o.x, ray.d.x, cube.min.x, cube.max.x);
+        let (y0, y1) = axis_t(ray.o.y, ray.d.y, cube.min.y, cube.max.y);
+        let (z0, z1) = axis_t(ray.o.z, ray.d.z, cube.min.z, cube.max.z);
+        let enter = x0.max(y0).max(z0);
+        let exit = x1.min(y1).min(z1);
+        let t = if enter > EPS { enter } else { exit };
+        exit >= enter && exit >= EPS && t <= distance
+    }) && !scene
+        .spheres
+        .iter()
+        .any(|&sphere| hit_sphere(sphere, ray).is_some_and(|hit| hit.t <= distance))
 }
 fn trace(scene: &Scene, r: Ray, depth: u32) -> V {
     let Some(h) = nearest(scene, r) else {
@@ -1149,21 +1160,29 @@ fn pixel(c: V) -> u32 {
     (q(c.x) << 16) | (q(c.y) << 8) | q(c.z)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct WorldTransition {
     from: usize,
     to: usize,
     elapsed_ms: u32,
     duration_ms: u32,
+    from_camera: Camera,
+    from_yaw: f32,
 }
 
 impl WorldTransition {
     fn new(from: usize, to: usize) -> Self {
+        Self::from_view(from, to, default_camera(from), 0.)
+    }
+
+    fn from_view(from: usize, to: usize, camera: Camera, yaw: f32) -> Self {
         Self {
             from: from % 3,
             to: to % 3,
             elapsed_ms: 0,
             duration_ms: (TRANSITION_DURATION * 1000.0) as u32,
+            from_camera: camera,
+            from_yaw: yaw,
         }
     }
 
@@ -1237,7 +1256,7 @@ fn render_transition(
 ) -> io::Result<u128> {
     let from_scene = scene(transition.from);
     let to_scene = scene(transition.to);
-    let from_camera = default_camera(transition.from);
+    let from_camera = transition.from_camera;
     let to_camera = default_camera(transition.to);
     let t = transition.eased_progress();
     let camera = Camera {
@@ -1248,7 +1267,7 @@ fn render_transition(
     };
     let mut from_scene = from_scene;
     let mut to_scene = to_scene;
-    from_scene.yaw *= 1.0 - t;
+    from_scene.yaw = transition.from_yaw * (1.0 - t);
     to_scene.yaw *= t;
     let started = Instant::now();
     render_world(&from_scene, &camera, w, h, from_buffer)?;
@@ -1491,7 +1510,9 @@ fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Resul
         1000.0 / avg_ms,
         previous
     );
-    let mut transition = WorldTransition::new(0, 1);
+    let from = benchmark_scene.sky as usize;
+    let to = (from + 1) % 3;
+    let mut transition = WorldTransition::from_view(from, to, camera, benchmark_scene.yaw);
     let mut transition_output = vec![0; (w * h) as usize];
     let mut transition_from = vec![0; (w * h) as usize];
     let mut transition_to = vec![0; (w * h) as usize];
@@ -1511,7 +1532,9 @@ fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Resul
     }
     let transition_fps = transition_frames as f64 / transition_started.elapsed().as_secs_f64();
     println!(
-        "TRANSITION_BENCHMARK Mario Odyssey -> Mario Galaxy | duration={:.1}s | frames={} | fps={:.2} | final={:016x}",
+        "TRANSITION_BENCHMARK {} -> {} | duration={:.1}s | frames={} | fps={:.2} | final={:016x}",
+        benchmark_scene.name,
+        scene(to).name,
         TRANSITION_DURATION,
         transition_frames,
         transition_fps,
@@ -1526,7 +1549,7 @@ fn transition_demo(dir: &Path, w: u32, h: u32) -> io::Result<()> {
     let mut first = true;
     let mut frame_no = 0;
     let mut timings = Vec::new();
-    for (from, to) in [(0, 1), (1, 2)] {
+    for (from, to) in [(0, 1), (1, 2), (2, 0)] {
         let mut transition = WorldTransition::new(from, to);
         let mut output = vec![0; (w * h) as usize];
         let mut from_buffer = vec![0; (w * h) as usize];
@@ -1566,7 +1589,7 @@ fn transition_demo(dir: &Path, w: u32, h: u32) -> io::Result<()> {
     let total_ms: u128 = timings.iter().sum();
     let fps = frame_no as f64 / (total_ms.max(1) as f64 / 1000.0);
     manifest.push_str(&format!(
-        "\n  ],\n  \"hashes_distinct_within_each_transition\": true,\n  \"fps\": {:.2},\n  \"final_world\": \"NSMB Wii\"\n}}\n",
+        "\n  ],\n  \"hashes_distinct_within_each_transition\": true,\n  \"fps\": {:.2},\n  \"final_world\": \"Mario Odyssey\"\n}}\n",
         fps
     ));
     std::fs::write(dir.join("manifest.json"), manifest)?;
@@ -1668,39 +1691,43 @@ fn main() -> io::Result<()> {
     let mut presented_size = (0, 0);
     let mut transition_buffers = (vec![0; (w * h) as usize], vec![0; (w * h) as usize]);
     let mut transition = None;
+    let mut transition_started = Instant::now();
     let mut dirty = true;
     let mut last_tick = Instant::now();
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let now = Instant::now();
-        let dt = now.duration_since(last_tick).as_secs_f32().min(0.1);
+        let elapsed = now.duration_since(last_tick);
+        let dt = elapsed.as_secs_f32().min(0.1);
         last_tick = now;
-        if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
-            cam.az -= 1.8 * dt;
-            dirty = true;
-        }
-        if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
-            cam.az += 1.8 * dt;
-            dirty = true;
-        }
-        if window.is_key_down(Key::Up) || window.is_key_down(Key::W) {
-            cam.el = (cam.el + 1.2 * dt).min(1.35);
-            dirty = true;
-        }
-        if window.is_key_down(Key::Down) || window.is_key_down(Key::S) {
-            cam.el = (cam.el - 1.2 * dt).max(-1.0);
-            dirty = true;
-        }
-        if window.is_key_down(Key::Equal) || window.is_key_down(Key::NumPadPlus) {
-            cam.distance = (cam.distance - 8.0 * dt).max(4.);
-            dirty = true;
-        }
-        if window.is_key_down(Key::Minus) || window.is_key_down(Key::NumPadMinus) {
-            cam.distance = (cam.distance + 8.0 * dt).min(30.);
-            dirty = true;
-        }
-        if window.is_key_down(Key::R) {
-            s.yaw += 1.5 * dt;
-            dirty = true;
+        if transition.is_none() {
+            if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
+                cam.az -= 1.8 * dt;
+                dirty = true;
+            }
+            if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
+                cam.az += 1.8 * dt;
+                dirty = true;
+            }
+            if window.is_key_down(Key::Up) || window.is_key_down(Key::W) {
+                cam.el = (cam.el + 1.2 * dt).min(1.35);
+                dirty = true;
+            }
+            if window.is_key_down(Key::Down) || window.is_key_down(Key::S) {
+                cam.el = (cam.el - 1.2 * dt).max(-1.0);
+                dirty = true;
+            }
+            if window.is_key_down(Key::Equal) || window.is_key_down(Key::NumPadPlus) {
+                cam.distance = (cam.distance - 8.0 * dt).max(4.);
+                dirty = true;
+            }
+            if window.is_key_down(Key::Minus) || window.is_key_down(Key::NumPadMinus) {
+                cam.distance = (cam.distance + 8.0 * dt).min(30.);
+                dirty = true;
+            }
+            if window.is_key_down(Key::R) {
+                s.yaw += 1.5 * dt;
+                dirty = true;
+            }
         }
         let requested = [Key::N, Key::Key1, Key::Key2, Key::Key3]
             .into_iter()
@@ -1708,12 +1735,16 @@ fn main() -> io::Result<()> {
         if transition.is_none() {
             if let Some(next_id) = requested_world(id, requested) {
                 if next_id != id {
-                    transition = Some(WorldTransition::new(id, next_id));
+                    transition = Some(WorldTransition::from_view(id, next_id, cam, s.yaw));
+                    transition_started = Instant::now();
                 }
             }
         }
         if let Some(mut active) = transition {
-            active.advance((dt * 1000.0) as u32);
+            active.elapsed_ms = transition_started
+                .elapsed()
+                .as_millis()
+                .min(u128::from(active.duration_ms)) as u32;
             render_transition(
                 &active,
                 w,
@@ -1923,6 +1954,40 @@ mod tests {
         assert_ne!(framebuffer_hash(&start), framebuffer_hash(&middle));
         assert_ne!(framebuffer_hash(&middle), framebuffer_hash(&end));
         assert_ne!(start, end);
+    }
+
+    #[test]
+    fn transitions_preserve_explored_view_and_end_at_destination() {
+        for from in 0..3 {
+            for to in 0..3 {
+                if from == to {
+                    continue;
+                }
+                let mut source = scene(from);
+                source.yaw = 0.65;
+                let mut camera = default_camera(from);
+                camera.az += 0.7;
+                camera.distance += 1.;
+                let mut transition = WorldTransition::from_view(from, to, camera, source.yaw);
+                let mut expected = vec![0; 32 * 24];
+                let mut output = expected.clone();
+                let mut a = expected.clone();
+                let mut b = expected.clone();
+                render_world(&source, &camera, 32, 24, &mut expected).unwrap();
+                render_transition(&transition, 32, 24, &mut output, &mut a, &mut b).unwrap();
+                assert_eq!(
+                    output, expected,
+                    "start of {from} -> {to} must preserve the view"
+                );
+                transition.advance(800);
+                render_world(&scene(to), &default_camera(to), 32, 24, &mut expected).unwrap();
+                render_transition(&transition, 32, 24, &mut output, &mut a, &mut b).unwrap();
+                assert_eq!(
+                    output, expected,
+                    "end of {from} -> {to} must match destination"
+                );
+            }
+        }
     }
 
     #[test]
