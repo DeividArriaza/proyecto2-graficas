@@ -83,6 +83,11 @@ La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FP
 órbita simulada. Odyssey→Galaxy durante la transición midió 107.46 FPS. El benchmark
 mide render CPU y movimiento de cámara; la ventana requiere un display X11/Wayland.
 
+La revisión desértica de Odyssey, con globo de energilunas más grande y base de
+terreno, midió **31.25 FPS** en órbita y **23.85 FPS** en la transición a Galaxy a
+320×240 en release, con 11/11 cambios de framebuffer. Estas mediciones corresponden
+al render CPU; pueden variar según el equipo.
+
 Las pruebas unitarias cubren intersección slab, existencia de geometría/materiales y órbita de cámara. El smoke test de exportación headless puede ejecutarse sin display con una resolución pequeña y una ruta temporal:
 
 ```bash
@@ -111,14 +116,19 @@ Las capturas y el GIF existentes en `artifacts/` son material de entrega; no son
 ## Estado visual y límites
 
 La revisión voxel posterior a v3 usa cámaras 3/4 específicas, iluminación key/fill/rim,
-tone mapping y composiciones separadas: Odyssey flota contra el skybox con casco crema y
+tone mapping y composiciones separadas: Odyssey está apoyada sobre un diorama cúbico
+inspirado en el Reino de las Arenas, con arena texturizada, estratos de roca rojiza,
+cactus de bloques, pirámide escalonada, columnas rotas y cielo azul. La nave conserva casco crema y
 rojo escalonado, proa por capas, cabina/copa roja alta con bandas, ventanas blancas,
 faro frontal facetado de cubos, barandas, mástil/bandera, cola con propulsores y un globo
-superior formado también por cuboides. Odyssey no usa esferas: la silueta es un modelo
+superior ampliado aproximadamente un 60 %, formado por 21 cubos dorados apilados.
+Odyssey no usa esferas: la silueta es un modelo
 voxel AABB inspirado en las capturas de referencia. Galaxy combina océano,
 continentes, accidentes y órbita inclinada; NSMB Wii muestra puerta, almenas, banderas,
 tuberías, bloques y monedas. Los PNG medidos, hashes y comparación con v2 están en
-`artifacts/review-v3/`; la nueva secuencia está en `artifacts/transition-demo-v3/`.
+`artifacts/review-v3/`; la secuencia v3 está en `artifacts/transition-demo-v3/`.
+Esos archivos son referencias históricas anteriores al globo ampliado y al entorno
+desértico. Para obtener la escena actual, exportar un render con `--headless`.
 
 El dip negro de transición está limitado a 7 %, para que el frame medio siga mostrando
 los dos mundos. La calidad sigue siendo procedural y estilizada: no hay modelos,

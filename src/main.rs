@@ -123,6 +123,9 @@ enum Kind {
     Water,
     Star,
     Stone,
+    Sand,
+    Sandstone,
+    Cactus,
 }
 impl Material {
     fn new(
@@ -213,6 +216,19 @@ fn mat(k: Kind) -> Material {
             V::new(1.4, 0.42, 0.03),
         ),
         Kind::Stone => Material::new(k, V::new(0.48, 0.52, 0.6), 0.18, 0.05, 0., 1., V::default()),
+        Kind::Sand => Material::new(k, V::new(0.92, 0.61, 0.28), 0.04, 0., 0., 1., V::default()),
+        Kind::Sandstone => {
+            Material::new(k, V::new(0.68, 0.24, 0.12), 0.08, 0., 0., 1., V::default())
+        }
+        Kind::Cactus => Material::new(
+            k,
+            V::new(0.12, 0.43, 0.19),
+            0.15,
+            0.01,
+            0.,
+            1.,
+            V::default(),
+        ),
     }
 }
 
@@ -378,6 +394,19 @@ fn texture(m: Material, u: f32, v: f32) -> V {
                 m.albedo * 0.8
             }
         }
+        Kind::Sand => {
+            let grain = (u * 173. + (v * 97.).sin() * 11.).sin().abs();
+            let ripple = (u * 24. + v * 5.).sin();
+            m.albedo * (0.86 + grain * 0.1 + ripple * 0.04)
+        }
+        Kind::Sandstone => {
+            let strata = (v * 36.).sin().abs();
+            m.albedo * (0.75 + strata * 0.25)
+        }
+        Kind::Cactus => {
+            let ribs = (u * 28.).sin().abs();
+            m.albedo * (0.65 + ribs * 0.35)
+        }
     }
     .clamp()
 }
@@ -405,6 +434,85 @@ fn sphere(out: &mut Vec<Sphere>, center: V, radius: f32, k: Kind) {
         radius,
         material: mat(k),
     });
+}
+
+fn sand_kingdom(out: &mut Vec<Cube>) {
+    // A finite square cutaway, with the ship resting on its sandy surface.
+    // Horizontal strata make the sides read as a miniature terrain block.
+    for (y, height, kind) in [
+        (-1.25, 0.55, Kind::Sandstone),
+        (-0.75, 0.45, Kind::Sand),
+        (-0.30, 0.45, Kind::Sandstone),
+        (0.22, 0.50, Kind::Sand),
+    ] {
+        cube(out, V::new(0., y, 0.), V::new(12., height, 12.), kind);
+    }
+
+    // Stepped ruin and broken columns along the rear edge, behind the ship.
+    for tier in 0..4 {
+        let width = 3.8 - tier as f32 * 0.8;
+        cube(
+            out,
+            V::new(-3.5, 0.77 + tier as f32 * 0.6, -3.9),
+            V::new(width, 0.6, width),
+            Kind::Sandstone,
+        );
+    }
+    for (x, height) in [(0.4, 1.7), (2.0, 2.3)] {
+        cube(
+            out,
+            V::new(x, 0.60, -4.4),
+            V::new(1., 0.26, 1.),
+            Kind::Sandstone,
+        );
+        cube(
+            out,
+            V::new(x, 0.73 + height * 0.5, -4.4),
+            V::new(0.56, height, 0.56),
+            Kind::Sandstone,
+        );
+        cube(
+            out,
+            V::new(x, 0.85 + height, -4.4),
+            V::new(0.85, 0.25, 0.85),
+            Kind::Sand,
+        );
+    }
+
+    // Two branched voxel cacti frame the deck without covering the headlight.
+    for (x, z, height) in [(-4.7, 1.6, 1.9), (4.5, -2.8, 2.5)] {
+        cube(
+            out,
+            V::new(x, 0.47 + height * 0.5, z),
+            V::new(0.42, height, 0.42),
+            Kind::Cactus,
+        );
+        for (side, branch_y) in [(-1., 1.15), (1., 1.55)] {
+            cube(
+                out,
+                V::new(x + side * 0.38, branch_y, z),
+                V::new(0.8, 0.28, 0.32),
+                Kind::Cactus,
+            );
+            cube(
+                out,
+                V::new(x + side * 0.66, branch_y + 0.26, z),
+                V::new(0.28, 0.65, 0.32),
+                Kind::Cactus,
+            );
+        }
+    }
+    // Small dunes and scattered ruin fragments remain inside the square base.
+    for (x, z) in [(-4.4, 4.5), (3.8, 4.3), (4.8, 0.2)] {
+        cube(out, V::new(x, 0.58, z), V::new(1.4, 0.22, 1.1), Kind::Sand);
+        cube(out, V::new(x, 0.75, z), V::new(0.8, 0.15, 0.6), Kind::Sand);
+    }
+    cube(
+        out,
+        V::new(-2.8, 0.65, -4.9),
+        V::new(0.6, 0.36, 0.45),
+        Kind::Sandstone,
+    );
 }
 fn scene(id: usize) -> Scene {
     let mut c = Vec::new();
@@ -645,9 +753,9 @@ fn scene(id: usize) -> Scene {
 
             // Stepped voxel sphere where the Odyssey stores Power Moons. Small
             // gaps between the cubes keep its block construction visible.
-            let globe_center = V::new(0., 4.82, -0.18);
-            let globe_cell = 0.25;
-            let globe_step = 0.28;
+            let globe_center = V::new(0., 5.22, -0.18);
+            let globe_cell = 0.40;
+            let globe_step = 0.40;
             for (layer, cells) in [
                 (0, &[(0, 0)][..]),
                 (1, &[(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)][..]),
@@ -685,16 +793,17 @@ fn scene(id: usize) -> Scene {
             // Black cap and golden finial from the reference ship.
             cube(
                 &mut c,
-                V::new(0., 5.48, -0.18),
-                V::new(0.34, 0.16, 0.34),
+                V::new(0., globe_center.y + 2. * globe_step + 0.26, -0.18),
+                V::new(0.46, 0.16, 0.46),
                 Kind::Dark,
             );
             cube(
                 &mut c,
-                V::new(0., 5.65, -0.18),
-                V::new(0.16, 0.16, 0.16),
+                V::new(0., 6.47, -0.18),
+                V::new(0.22, 0.22, 0.22),
                 Kind::Star,
             );
+            sand_kingdom(&mut c);
         }
         1 => {
             // Layered planetoid: rocky caps, clouds and a tilted, irregular star orbit.
@@ -895,10 +1004,10 @@ impl Camera {
 fn default_camera(id: usize) -> Camera {
     match id % 3 {
         0 => Camera {
-            target: V::new(0., 2.45, 0.15),
-            distance: 8.8,
+            target: V::new(0., 1.8, 0.),
+            distance: 14.8,
             az: 0.83,
-            el: 0.46,
+            el: 0.52,
         },
         1 => Camera {
             target: V::new(0., 2.0, 0.),
@@ -925,7 +1034,7 @@ fn sky(dir: V, id: u8) -> V {
         V::new(0.25, 0.55, 0.95).lerp(V::new(0.75, 0.9, 1.), t)
     } else {
         let t = (dir.y + 1.) * 0.5;
-        V::new(0.015, 0.04, 0.12).lerp(V::new(0.16, 0.38, 0.56), t)
+        V::new(0.66, 0.77, 0.84).lerp(V::new(0.12, 0.48, 0.76), t)
     }
 }
 fn schlick(cosi: f32, etai: f32, etat: f32) -> f32 {
