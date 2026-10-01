@@ -1,5 +1,27 @@
 # Handoff para el próximo agente Codex
 
+## Actualización vigente — 2026-10-01
+
+Por solicitud posterior del usuario, el tercer mundo ahora es **Super Mario 64**, no
+NSMB Wii. El ciclo vigente es Odyssey → Galaxy → Mario 64 → Odyssey. Las referencias
+actuales `Mario_Galaxy2.png` y `Mario64.png` guían respectivamente el planetoide voxel
+con rostro/gorra-jardín de Mario y el castillo de Peach con techos rojos, puente, agua
+y jardines. Los modelos están en `src/worlds.rs`; los tres mundos activos usan sólo
+cubos/AABB, manteniendo Launch Star y tubería como anclajes de viaje.
+
+`src/audio.rs` sintetiza tres ambientes originales y tres efectos de 0.8 s; `B`
+silencia/reactiva. No se incluyen las canciones de Nintendo: se cargan WAV propios
+con `--audio-dir` (nombres en README). `--export-audio` exporta las pistas originales
+sin sobrescribir archivos existentes; `--audio-demo` comprueba el ciclo sonoro.
+La reproducción usa `pw-play` o `aplay` del sistema, sin nuevas dependencias Cargo;
+si falla el dispositivo, el render continúa sin sonido. Headless y benchmarks no
+inician audio. Los WAV temporales y procesos propios se limpian al cerrar normalmente.
+
+README y los manifests actuales contienen los controles y resultados vigentes
+(23 pruebas y benchmarks de órbita/transición superiores a 10 FPS de promedio).
+Las menciones a NSMB Wii y los estados iniciales del resto de este handoff son
+antecedentes históricos; no deben revertir esta actualización del usuario.
+
 ## Estado actual
 
 El proyecto es un raytracer de CPU en Rust para tres dioramas: Mario Odyssey, Mario Galaxy y New Super Mario Bros. Wii. La geometría actual usa AABB/cubos, hay texturas procedurales por cara, sombras, reflexión, refracción, emisión y skyboxes por escena. La cámara permite órbita, elevación, zoom y rotación del diorama.

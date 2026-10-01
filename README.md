@@ -1,6 +1,6 @@
 # Proyecto 2 — Dioramas con raytracing
 
-Renderer de CPU en Rust para tres dioramas: Mario Odyssey, Mario Galaxy y NSMB Wii. Conserva geometría AABB con UV por cara, texturas procedurales, sombras, reflexión, refracción, emisión y skyboxes por escena.
+Renderer de CPU en Rust para tres dioramas: Mario Odyssey, Mario Galaxy y Super Mario 64. Los tres modelos actuales se construyen exclusivamente con cubos/AABB texturizados. Conserva UV por cara, sombras, reflexión, refracción, emisión y skyboxes por escena.
 
 ## Ejecutar
 
@@ -25,8 +25,9 @@ Controles:
 | `I` / `K` mantenidas | Subir/bajar el ángulo de la luz principal |
 | `H` | Restablecer la iluminación original del mundo |
 | `Q` / `E` | Quitar/añadir una energiluna en Odyssey (0–20) |
-| `N` | Transición al siguiente mundo: Odyssey → Galaxy → NSMB Wii → Odyssey |
-| `1` / `2` / `3` | Transición directa a Odyssey / Galaxy / NSMB Wii |
+| `B` | Silenciar/reactivar música y efectos de sonido |
+| `N` | Transición al siguiente mundo: Odyssey → Galaxy → Mario 64 → Odyssey |
+| `1` / `2` / `3` | Transición directa a Odyssey / Galaxy / Mario 64 |
 | `F11` | Sin acción: minifb 0.26 no ofrece una API pública y verificable para fullscreen |
 | `Esc` o cerrar la ventana | Salir |
 
@@ -46,6 +47,8 @@ en el proyecto mediante funciones de `u/v`; no son únicamente colores constante
 La BVH descarta grupos de bloques que el rayo no cruza y acelera también las sombras.
 Las figuras, matemáticas, texturas y efectos se implementan en Rust dentro del
 proyecto; minifb presenta la ventana, Rayon paraleliza las filas y png exporta imágenes.
+Los nuevos modelos están en `src/worlds.rs`; la síntesis y gestión de sonido, en
+`src/audio.rs`. No se añadió ninguna dependencia de Cargo ni un motor de geometría.
 
 Cinco materiales que pueden mostrarse durante la presentación:
 
@@ -112,6 +115,73 @@ cargo run --release -- --headless --scene 0 --inspect-material water --hud --wid
 
 Capturas y hashes: [controles interactivos](artifacts/controls/manifest.json).
 
+## Galaxy y Mario 64 según las referencias
+
+`Mario_Galaxy2.png` guía el nuevo planetoide con rostro de Mario: cabeza crema
+facetada, orejas, nariz saliente, ojos, bigote verde, gorra-jardín con visera y banda
+clara, insignia roja `M`, árboles y una casita en la copa. Cabeza, nariz y gorra son
+envolventes voxel cerradas; no se usan esferas de render. La Launch Star emisiva y
+las estrellas de la órbita también son cubos y conservan el viaje al siguiente mundo.
+
+`Mario64.png` guía el reemplazo de NSMB Wii por el castillo de Peach: muros claros
+en cursos de bloques, cuatro torres, torre central alta, techos rojos escalonados,
+ventanas, entrada y medallón alusivo a Peach, puente, foso y lago azul, caminos,
+jardines y árboles. La base queda delimitada como un diorama cuadrado. La tubería
+verde sigue siendo el punto de salida hacia Odyssey; no hay personajes ni gameplay.
+
+Materiales adicionales con textura y parámetros propios: `skin`, `castle`, `roof`,
+`path`, `bark`, `lake-bed` y `lake-water`. El último mantiene refracción con IOR 1.33
+y reflexión; su albedo azul y transparencia 0.32 distinguen el agua del lago del
+agua del oasis. Se pueden recorrer con `Tab/T` y exportar con `--inspect-material`.
+
+## Música y efectos por mundo
+
+El modo interactivo reproduce audio por defecto. Se sintetizan en Rust tres
+ambientes originales diferentes de 12 segundos que se repiten: uno rítmico para
+Odyssey, otro más etéreo para Galaxy y otro alegre para Mario 64. **No son las
+canciones originales de Nintendo**. No había audios en las referencias subidas.
+
+Al iniciar un viaje se detiene la música origen y se dispara su efecto de 0.8 s:
+ascenso de motor, brillo de Launch Star o descenso de tubería. Al llegar comienza
+la música del destino. Las solicitudes ignoradas durante un viaje no disparan
+efectos adicionales. `B` silencia tanto música como efectos; `--mute` inicia sin sonido.
+
+La reproducción se delega a `pw-play` (PipeWire), con `aplay` (ALSA) como alternativa
+si el primero no está instalado. Son herramientas del sistema, no implementan el
+raytracer. Si no hay reproductor/dispositivo, el render continúa y el panel informa
+que el audio no está disponible. Si el reproductor presente falla, se desactiva el
+audio en esa ejecución; no se intenta cambiar de dispositivo automáticamente.
+Los procesos son hijos propios, se recogen y se detienen al cerrar normalmente.
+Los WAV sintetizados viven en un directorio temporal propio que se limpia al salir;
+una terminación forzada del proceso puede impedir esa limpieza. Headless y benchmarks
+no abren audio ni generan WAV.
+
+Para usar tus canciones y efectos en formato WAV compatible con el reproductor,
+creá una carpeta fuera del repositorio con estos seis nombres:
+
+| Ambiente | Efecto al salir |
+| --- | --- |
+| `odyssey.wav` | `odyssey-transition.wav` |
+| `galaxy.wav` | `galaxy-transition.wav` |
+| `mario64.wav` | `mario64-transition.wav` |
+
+Podés exportar primero los seis audios originales y reemplazar únicamente las pistas
+que quieras con grabaciones que tengas permiso de usar. El exportador rechaza destinos
+con esos archivos existentes; la reproducción nunca escribe ni borra tu carpeta.
+
+```bash
+audio_export_dir=$(mktemp -d /tmp/mario-audio-XXXXXX)
+cargo run --release -- --export-audio "$audio_export_dir"
+cargo run --release -- --audio-dir "$audio_export_dir"
+cargo run --release -- --audio-demo --audio-dir "$audio_export_dir"
+cargo run --release -- --mute
+```
+
+`--audio-demo` prueba los tres ambientes y efectos sin abrir ventana; requiere una
+salida de audio real. `--smoke-frames 30` cierra una ventana de prueba normalmente,
+permitiendo recoger procesos y limpiar temporales. Los WAV de prueba no se versionan;
+los parámetros y hashes PCM reproducibles están en `artifacts/audio/manifest.json`.
+
 ![Bloques de arena resaltados en el inspector](artifacts/inspection/sand.png)
 
 [Estuco de las casas](artifacts/inspection/stucco-teal.png) ·
@@ -135,7 +205,7 @@ que el framebuffer cambia:
 cargo run --release -- --benchmark --scene 0 --width 320 --height 240
 ```
 
-`--scene` acepta `0` (Odyssey), `1` (Galaxy) o `2` (NSMB Wii). El modo headless es útil para smoke tests y exportación; los renders generados deben mantenerse fuera del working tree o ignorados.
+`--scene` acepta `0` (Odyssey), `1` (Galaxy) o `2` (Mario 64). El modo headless es útil para smoke tests y exportación; los renders de prueba deben mantenerse fuera del working tree o ignorados.
 
 ## Requisitos
 
@@ -157,7 +227,7 @@ salto a la vista predeterminada. Durante la transición se suspende el control d
 y se usa el tiempo transcurrido real, sin el límite de delta-time del movimiento manual.
 La salida depende del mundo origen: Odyssey despega físicamente con sus bloques y
 un escape voxel, Galaxy acerca la cámara a una Launch Star construida con cubos y
-un pulso emisivo, y NSMB acerca la cámara a una tubería con borde hueco. La llegada
+un pulso emisivo, y Mario 64 acerca la cámara a una tubería con borde hueco. La llegada
 parte de una cámara elevada y más distante y se asienta en la vista del destino.
 Son motivos escénicos del viaje, sin personajes ni animación de Mario. La luz elegida
 y el llenado del globo se conservan. Los extremos del crossfade coinciden exactamente
@@ -187,17 +257,22 @@ Medición del 2026-10-01 en release a 320×240 (render CPU, variable según el e
 
 | Mundo | Órbita FPS | Transición al siguiente FPS |
 | --- | ---: | ---: |
-| Odyssey | 77.92 | 34.97 |
-| Galaxy | 255.32 | 48.81 |
-| NSMB Wii | 93.75 | 23.90 |
+| Odyssey | 63.49 | 23.58 |
+| Galaxy | 93.75 | 18.20 |
+| Mario 64 | 44.12 | 11.69 |
 
 Cada benchmark mide ahora la transición que sale del mundo elegido, conservando su
-cámara orbital final. Las 20 pruebas incluyen la continuidad del primer y último
+cámara orbital final e incluyendo reconstrucción de escenas/BVH, no sólo el trazado.
+Los FPS son promedios de la secuencia, no un mínimo por frame; varían según el equipo.
+Las 23 pruebas incluyen la continuidad del primer y último
 frame para las seis combinaciones de mundos, después de orbitar y rotar la escena.
 La BVH se verifica comparando impactos y sombras contra la búsqueda lineal en los
 tres mundos rotados. También se prueba que la inspección distingue materiales y
 muestra sus parámetros; se prueban también el HUD, el llenado continuo y acotado del
 globo, y la modificación de la luz principal sin alterar las luces auxiliares.
+Las nuevas pruebas verifican los dos mundos voxel y sus anclajes de viaje, seis
+audios distintos y acotados, duración de efectos, silencio, estado del ciclo y
+limpieza de temporales propios sin sobrescribir archivos existentes.
 
 La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
 (Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la
@@ -240,7 +315,7 @@ sigue pendiente. No se generan estos archivos automáticamente al abrir la venta
 
 ![Odyssey en el Reino de las Arenas](artifacts/final/odyssey.png)
 
-[Captura Galaxy](artifacts/final/galaxy.png) · [Captura NSMB Wii](artifacts/final/nsmb-wii.png)
+[Captura Galaxy](artifacts/final/galaxy.png) · [Captura Mario 64](artifacts/final/mario64.png)
 
 ## Estado visual y límites
 
@@ -253,18 +328,20 @@ rojo escalonado, proa por capas, cabina/copa roja alta con bandas, ventanas blan
 faro frontal facetado de cubos, barandas, mástil/bandera, cola con propulsores y un globo
 superior formado por 21 cubos dorados apilados, con tamaño regulable mediante energilunas.
 Odyssey no usa esferas: la silueta es un modelo
-voxel AABB inspirado en las capturas de referencia. Galaxy combina océano,
-continentes, accidentes y órbita inclinada; NSMB Wii muestra puerta, almenas, banderas,
-tuberías, bloques y monedas. Los PNG medidos, hashes y comparación con v2 están en
+voxel AABB inspirado en las capturas de referencia. Galaxy muestra ahora el
+planetoide de Mario y su gorra-jardín; Mario 64, el castillo de Peach y sus exteriores.
+El antiguo render de NSMB queda como referencia histórica, no como escena activa.
+Los PNG medidos, hashes y comparación con v2 están en
 `artifacts/review-v3/`; la secuencia v3 está en `artifacts/transition-demo-v3/`.
 Esos archivos son referencias históricas anteriores al globo ampliado y al entorno
 desértico. Para obtener la escena actual, exportar un render con `--headless`.
 
 El dip negro de transición está limitado a 7 %, para que el frame medio siga mostrando
 los dos mundos. La calidad sigue siendo procedural y estilizada: no hay modelos
-importados, texturas pintadas, antialiasing ni bloom. La ventana real pasó una prueba
-de arranque de 5 segundos sin segfault (terminada con `timeout`, código 124);
-Wayland todavía imprime el aviso no fatal de decoración ausente. Las teclas se validan
+importados, texturas pintadas, antialiasing ni bloom. Las tres ventanas reales pasaron
+una prueba de 30 ticks con audio y cierre normal (código 0), sin segfault.
+El ciclo de ambientes y efectos pasó `--audio-demo` usando PipeWire. Wayland todavía
+imprime avisos no fatales de decoración ausente y proxies al cerrar. Las teclas se validan
 por sus funciones de estado y renders automatizados, no por una prueba manual completa.
 
 La estética sigue siendo estilizada y procedural: no hay modelos ni texturas pintadas a

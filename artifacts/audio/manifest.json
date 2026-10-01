@@ -1,0 +1,23 @@
+{
+  "source": "original Rust synthesis, not Nintendo recordings",
+  "sample_rate": 22050,
+  "channels": 1,
+  "bits": 16,
+  "wav_files": "generated on demand outside the repository using --export-audio",
+  "tracks": [
+    {"file": "odyssey.wav", "samples": 264600, "seconds": 12, "pcm_hash": "bb4b6b340fd87399"},
+    {"file": "galaxy.wav", "samples": 264600, "seconds": 12, "pcm_hash": "40356ba6f209f618"},
+    {"file": "mario64.wav", "samples": 264600, "seconds": 12, "pcm_hash": "b4b139bc5749a725"},
+    {"file": "odyssey-transition.wav", "samples": 17640, "seconds": 0.8, "pcm_hash": "4f616121c640f09d"},
+    {"file": "galaxy-transition.wav", "samples": 17640, "seconds": 0.8, "pcm_hash": "2aed3831972e7757"},
+    {"file": "mario64-transition.wav", "samples": 17640, "seconds": 0.8, "pcm_hash": "c18678397d303613"}
+  ],
+  "verification": {
+    "date": "2026-10-01",
+    "audio_demo": "passed: three environments and three effects, cycle completed",
+    "backend": "pw-play (PipeWire)",
+    "window_smoke": "all three worlds, 30 ticks each, normal exit code 0",
+    "wayland_warnings": "missing server-side decoration and attached proxies on exit; no segfault",
+    "manual_keyboard_and_listening_review": "not performed"
+  }
+}

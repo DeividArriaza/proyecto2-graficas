@@ -9,6 +9,9 @@ use std::{
 use minifb::{Key, KeyRepeat, Scale, ScaleMode, Window, WindowOptions};
 use rayon::prelude::*;
 
+mod audio;
+mod worlds;
+
 const EPS: f32 = 0.001;
 const MAX_DEPTH: u32 = 3;
 /// Fixed transition duration. Requests received while active are ignored.
@@ -129,8 +132,15 @@ enum Kind {
     StuccoTeal,
     StuccoYellow,
     StuccoMagenta,
+    Skin,
+    Castle,
+    Roof,
+    Path,
+    Bark,
+    LakeBed,
+    LakeWater,
 }
-const MATERIALS: [Kind; 16] = [
+const MATERIALS: [Kind; 23] = [
     Kind::Grass,
     Kind::Planet,
     Kind::Brick,
@@ -147,6 +157,13 @@ const MATERIALS: [Kind; 16] = [
     Kind::StuccoTeal,
     Kind::StuccoYellow,
     Kind::StuccoMagenta,
+    Kind::Skin,
+    Kind::Castle,
+    Kind::Roof,
+    Kind::Path,
+    Kind::Bark,
+    Kind::LakeBed,
+    Kind::LakeWater,
 ];
 impl Kind {
     fn name(self) -> &'static str {
@@ -167,6 +184,13 @@ impl Kind {
             Self::StuccoTeal => "stucco-teal",
             Self::StuccoYellow => "stucco-yellow",
             Self::StuccoMagenta => "stucco-magenta",
+            Self::Skin => "skin",
+            Self::Castle => "castle",
+            Self::Roof => "roof",
+            Self::Path => "path",
+            Self::Bark => "bark",
+            Self::LakeBed => "lake-bed",
+            Self::LakeWater => "lake-water",
         }
     }
 }
@@ -193,6 +217,29 @@ impl Material {
 }
 fn mat(k: Kind) -> Material {
     match k {
+        Kind::LakeWater => Material::new(
+            k,
+            V::new(0.025, 0.25, 0.92),
+            0.30,
+            0.10,
+            0.32,
+            1.33,
+            V::default(),
+        ),
+        Kind::LakeBed => Material::new(k, V::new(0.04, 0.22, 0.68), 0.02, 0., 0., 1., V::default()),
+        Kind::Skin => Material::new(k, V::new(0.94, 0.70, 0.40), 0.08, 0., 0., 1., V::default()),
+        Kind::Castle => Material::new(k, V::new(0.91, 0.88, 0.79), 0.10, 0., 0., 1., V::default()),
+        Kind::Roof => Material::new(
+            k,
+            V::new(0.72, 0.025, 0.07),
+            0.16,
+            0.025,
+            0.,
+            1.,
+            V::default(),
+        ),
+        Kind::Path => Material::new(k, V::new(0.83, 0.68, 0.42), 0.03, 0., 0., 1., V::default()),
+        Kind::Bark => Material::new(k, V::new(0.30, 0.13, 0.045), 0.05, 0., 0., 1., V::default()),
         Kind::Grass => Material::new(
             k,
             V::new(0.12, 0.62, 0.10),
@@ -411,6 +458,29 @@ fn ry(v: V, a: f32) -> V {
 fn texture(m: Material, u: f32, v: f32) -> V {
     let (x, y) = ((u * 8.).floor() as i32, (v * 8.).floor() as i32);
     match m.kind {
+        Kind::LakeWater => m.albedo * (0.88 + 0.12 * (u * 15. + (v * 12.).sin()).sin().abs()),
+        Kind::LakeBed => m.albedo * (0.82 + 0.18 * (u * 19. + v * 23.).sin().abs()),
+        Kind::Skin => m.albedo * (0.96 + 0.04 * (u * 53. + v * 29.).sin().abs()),
+        Kind::Castle => {
+            let mortar =
+                (v * 5.).fract() < 0.06 || (u * 4. + (v * 5.).floor() * 0.5).fract() < 0.04;
+            m.albedo
+                * if mortar {
+                    0.74
+                } else {
+                    0.95 + 0.05 * (u * 71. + v * 83.).sin().abs()
+                }
+        }
+        Kind::Roof => {
+            m.albedo
+                * if (v * 8.).fract() < 0.09 {
+                    0.65
+                } else {
+                    0.90 + 0.1 * (u * 12.).sin().abs()
+                }
+        }
+        Kind::Path => m.albedo * (0.86 + 0.14 * (u * 97. + v * 61.).sin().abs()),
+        Kind::Bark => m.albedo * (0.65 + 0.35 * (u * 23. + (v * 9.).sin()).sin().abs()),
         Kind::Brick => {
             let mortar =
                 (v * 6.).fract() < 0.07 || (u * 4. + (v * 6.).floor() % 2. * 0.5).fract() < 0.05;
@@ -609,14 +679,6 @@ fn cube(out: &mut Vec<Cube>, center: V, size: V, k: Kind) {
         ship: false,
     });
 }
-fn sphere(out: &mut Vec<Sphere>, center: V, radius: f32, k: Kind) {
-    out.push(Sphere {
-        center,
-        radius,
-        material: mat(k),
-    });
-}
-
 fn desert_house(out: &mut Vec<Cube>, center: V, cell: f32, body: Kind) {
     // Painted masonry blocks, not a smooth imported mesh. AABB domes are
     // stepped roof tiers inspired by Desierto1.png and Desierto2.png.
@@ -853,7 +915,7 @@ fn scene(id: usize) -> Scene {
 
 fn scene_with_charge(id: usize, fill: f32) -> Scene {
     let mut c = Vec::new();
-    let mut spheres = Vec::new();
+    let spheres = Vec::new();
     match id % 3 {
         0 => {
             // Odyssey: a deliberately voxel-first reconstruction of the hat ship.
@@ -1150,189 +1212,13 @@ fn scene_with_charge(id: usize, fill: f32) -> Scene {
             }
             sand_kingdom(&mut c);
         }
-        1 => {
-            // A five-point Launch Star built from a small voxel silhouette.
-            for (row, mask) in [
-                0b1000001u8,
-                0b1100011,
-                0b0111110,
-                0b0111110,
-                0b1111111,
-                0b0011100,
-                0b0001000,
-            ]
-            .iter()
-            .enumerate()
-            {
-                for x in 0..7 {
-                    if mask & (1 << x) != 0 {
-                        cube(
-                            &mut c,
-                            V::new(
-                                2.9 + (x as f32 - 3.) * 0.19,
-                                3.3 + (row as f32 - 3.) * 0.19,
-                                2.7,
-                            ),
-                            V::new(0.19, 0.19, 0.20),
-                            Kind::Star,
-                        );
-                    }
-                }
-            }
-            // Layered planetoid: rocky caps, clouds and a tilted, irregular star orbit.
-            sphere(&mut spheres, V::new(0., 1.9, 0.), 2.35, Kind::Planet);
-            sphere(&mut spheres, V::new(-0.7, 3.42, 0.48), 0.7, Kind::Stone);
-            sphere(&mut spheres, V::new(0.62, 3.7, -0.15), 0.42, Kind::Cloud);
-            sphere(&mut spheres, V::new(1.48, 2.55, 1.35), 0.32, Kind::Stone);
-            sphere(&mut spheres, V::new(-1.7, 1.65, 1.12), 0.25, Kind::Cloud);
-            for i in 0..24 {
-                let a = i as f32 * std::f32::consts::TAU / 24.;
-                let p = V::new(
-                    a.cos() * 4.35,
-                    2.05 + a.sin() * 1.15,
-                    a.sin() * 2.3 + a.cos() * 0.65,
-                );
-                sphere(
-                    &mut spheres,
-                    p,
-                    if i % 5 == 0 { 0.25 } else { 0.1 },
-                    if i % 5 == 0 { Kind::Star } else { Kind::Cloud },
-                );
-            }
-            cube(
-                &mut c,
-                V::new(0., -0.5, 0.),
-                V::new(3.0, 0.5, 3.0),
-                Kind::Stone,
-            );
-        }
-        _ => {
-            for x in -6..=6 {
-                for z in -5..=5 {
-                    if x * x + z * z <= 42 {
-                        cube(
-                            &mut c,
-                            V::new(x as f32, 0., z as f32),
-                            V::new(1., 0.5, 1.),
-                            Kind::Grass,
-                        );
-                    }
-                }
-            }
-            // Castle facade with a dark door, central crenels, flags, pipes, blocks and coins.
-            cube(
-                &mut c,
-                V::new(0., 2.0, -2.7),
-                V::new(7.2, 4., 0.9),
-                Kind::Stone,
-            );
-            cube(
-                &mut c,
-                V::new(0., 1.35, -2.18),
-                V::new(1.45, 2.45, 0.18),
-                Kind::Dark,
-            );
-            cube(
-                &mut c,
-                V::new(0., 2.55, -2.15),
-                V::new(2.0, 0.28, 0.22),
-                Kind::Brick,
-            );
-            for x in [-0.82, 0.82] {
-                cube(
-                    &mut c,
-                    V::new(x, 1.35, -2.15),
-                    V::new(0.25, 2.4, 0.22),
-                    Kind::Brick,
-                );
-            }
-            for x in [-3.1, 3.1] {
-                cube(
-                    &mut c,
-                    V::new(x, 3.1, -2.7),
-                    V::new(1.7, 6.2, 1.2),
-                    Kind::Stone,
-                );
-                cube(
-                    &mut c,
-                    V::new(x, 6.3, -2.7),
-                    V::new(2.25, 0.5, 1.35),
-                    Kind::Brick,
-                );
-                for dx in [-0.55, 0.55] {
-                    cube(
-                        &mut c,
-                        V::new(x + dx, 6.85, -2.7),
-                        V::new(0.36, 0.55, 1.2),
-                        Kind::Stone,
-                    );
-                }
-                cube(
-                    &mut c,
-                    V::new(x, 7.75, -2.65),
-                    V::new(0.08, 1.5, 0.08),
-                    Kind::Metal,
-                );
-                cube(
-                    &mut c,
-                    V::new(x + 0.45, 7.3, -2.62),
-                    V::new(0.9, 0.5, 0.08),
-                    Kind::Brick,
-                );
-            }
-            for x in [-1.4, 0., 1.4] {
-                cube(
-                    &mut c,
-                    V::new(x, 4.15, -2.14),
-                    V::new(0.55, 0.62, 0.25),
-                    Kind::Stone,
-                );
-            }
-            for x in [-3.8, 3.8] {
-                cube(
-                    &mut c,
-                    V::new(x, 1.25, 1.6),
-                    V::new(1.0, 2.5, 1.0),
-                    Kind::Pipe,
-                );
-                for dx in [-0.6, 0.6] {
-                    cube(
-                        &mut c,
-                        V::new(x + dx, 2.65, 1.6),
-                        V::new(0.45, 0.35, 1.65),
-                        Kind::Pipe,
-                    );
-                }
-                for dz in [-0.6, 0.6] {
-                    cube(
-                        &mut c,
-                        V::new(x, 2.65, 1.6 + dz),
-                        V::new(0.75, 0.35, 0.45),
-                        Kind::Pipe,
-                    );
-                }
-                cube(
-                    &mut c,
-                    V::new(x, 2.52, 1.6),
-                    V::new(0.72, 0.04, 0.72),
-                    Kind::Dark,
-                );
-            }
-            for x in [-2.0, 0.0, 2.0] {
-                cube(
-                    &mut c,
-                    V::new(x, 1.5, 0.25),
-                    V::new(1., 1., 1.),
-                    Kind::Brick,
-                );
-                sphere(&mut spheres, V::new(x, 3.0, 0.2), 0.3, Kind::Star);
-            }
-        }
+        1 => worlds::galaxy(&mut c),
+        _ => worlds::mario64(&mut c),
     }
     let name = match id % 3 {
         0 => "Mario Odyssey",
         1 => "Mario Galaxy",
-        _ => "NSMB Wii",
+        _ => "Super Mario 64",
     };
     let lights = match id % 3 {
         0 => vec![
@@ -1402,16 +1288,16 @@ fn default_camera(id: usize) -> Camera {
             el: 0.52,
         },
         1 => Camera {
-            target: V::new(0., 2.0, 0.),
-            distance: 11.8,
-            az: 0.78,
-            el: 0.42,
+            target: V::new(0., 3.0, 0.),
+            distance: 9.8,
+            az: 0.38,
+            el: 0.34,
         },
         _ => Camera {
-            target: V::new(0., 2.6, -1.2),
-            distance: 12.8,
-            az: 0.75,
-            el: 0.4,
+            target: V::new(0., 2.7, -0.2),
+            distance: 18.0,
+            az: 0.62,
+            el: 0.55,
         },
     }
 }
@@ -1709,6 +1595,8 @@ fn render_transition(
     from_buffer: &mut [u32],
     to_buffer: &mut [u32],
 ) -> io::Result<u128> {
+    // Include scene/BVH reconstruction in transition performance measurements.
+    let started = Instant::now();
     let mut from_scene = scene_with_charge(transition.from, transition.moon_fill);
     let mut to_scene = scene_with_charge(transition.to, transition.moon_fill);
     from_scene.lights[0].0 = transition.from_light;
@@ -1743,8 +1631,8 @@ fn render_transition(
     }
     let (exit_anchor, exit_distance, exit_elevation) = match transition.from {
         0 => (V::new(0., 3.4 + lift, 0.), 4.5, 0.35),
-        1 => (V::new(2.9, 3.3, 2.7), 0.85, 0.25),
-        _ => (V::new(3.8, 2.50, 1.6), 0.60, 1.35),
+        1 => (worlds::GALAXY_EXIT, 0.85, 0.25),
+        _ => (worlds::CASTLE_EXIT, 0.60, 1.35),
     };
     let source_camera = Camera {
         target: from_camera.target.lerp(ry(exit_anchor, from_scene.yaw), t),
@@ -1759,7 +1647,6 @@ fn render_transition(
         az: to_camera.az + 0.25 * (1. - t),
         el: to_camera.el + 0.25 * (1. - t),
     };
-    let started = Instant::now();
     render_world(&from_scene, &source_camera, w, h, from_buffer)?;
     render_world(&to_scene, &entry_camera, w, h, to_buffer)?;
     composite_transition(from_buffer, to_buffer, t, output);
@@ -2320,6 +2207,8 @@ fn usage() {
     println!("Demo headless: cargo run -- --transition-demo DIR [--width N] [--height N]");
     println!("Inspección: --inspect-material sand|metal|water|stucco-teal (con --headless y --output, o interactivo)");
     println!("Estado: --moons 0..20 --light-azimuth GRADOS --light-elevation GRADOS; --hud incluye el panel en exportación headless.");
+    println!("Audio: --mute, --audio-dir DIR (6 WAV propios), --export-audio DIR (síntesis original sin ventana). B silencia/activa.");
+    println!("Pruebas opcionales: --audio-demo (ciclo de sonido sin ventana); --smoke-frames N (cerrar ventana normalmente tras N ticks).");
     println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, M inspeccionar, Tab/T iniciar o recorrer materiales, J/L luz horizontal, I/K luz vertical, H restablecer luz, Q/E quitar/añadir energilunas, N/1/2/3 cambiar escena, Escape salir.");
 }
 fn main() -> io::Result<()> {
@@ -2339,6 +2228,11 @@ fn main() -> io::Result<()> {
     let mut moon_count = 10;
     let mut rig = LightRig::default();
     let mut export_hud = false;
+    let mut muted = false;
+    let mut audio_dir = None;
+    let mut audio_export = None;
+    let mut smoke_frames = None;
+    let mut audio_demo = false;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -2398,6 +2292,37 @@ fn main() -> io::Result<()> {
                 }
             }
             "--hud" => export_hud = true,
+            "--mute" => muted = true,
+            "--audio-demo" => audio_demo = true,
+            "--smoke-frames" => {
+                i += 1;
+                smoke_frames = Some(
+                    args.get(i)
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .filter(|n| *n > 0)
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "--smoke-frames requiere un entero positivo",
+                            )
+                        })?,
+                );
+            }
+            "--audio-dir" | "--export-audio" => {
+                let exporting = args[i] == "--export-audio";
+                i += 1;
+                let dir = args
+                    .get(i)
+                    .ok_or_else(|| {
+                        io::Error::new(io::ErrorKind::InvalidInput, "audio requiere un directorio")
+                    })?
+                    .clone();
+                if exporting {
+                    audio_export = Some(dir);
+                } else {
+                    audio_dir = Some(dir);
+                }
+            }
             "--inspect-material" => {
                 i += 1;
                 let name = args.get(i).ok_or_else(|| {
@@ -2418,6 +2343,16 @@ fn main() -> io::Result<()> {
             _ => {}
         }
         i += 1;
+    }
+    if let Some(dir) = audio_export {
+        audio::export(Path::new(&dir))?;
+        println!(
+            "AUDIO_EXPORT {dir} | 3 ambientes originales de 12s + 3 efectos de 0.8s | PCM 22050 Hz"
+        );
+        return Ok(());
+    }
+    if audio_demo {
+        return audio::demo(audio_dir.as_deref().map(Path::new));
     }
     let mut cam = default_camera(id);
     let mut moons = MoonCharge::new(moon_count);
@@ -2470,6 +2405,7 @@ fn main() -> io::Result<()> {
     )
     .map_err(|error| io::Error::other(error.to_string()))?;
     window.set_target_fps(60);
+    let mut sound = audio::Audio::new(audio_dir.as_deref().map(Path::new), muted, id)?;
     window.set_title(&inspection_title(&s, inspection));
     let mut buffer = vec![0; (w * h) as usize];
     let mut presentation = Vec::new();
@@ -2479,11 +2415,20 @@ fn main() -> io::Result<()> {
     let mut transition_started = Instant::now();
     let mut dirty = true;
     let mut last_tick = Instant::now();
+    let mut ticks = 0u32;
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let now = Instant::now();
         let elapsed = now.duration_since(last_tick);
         let dt = elapsed.as_secs_f32().min(0.1);
         last_tick = now;
+        let previous_audio_label = sound.label();
+        sound.tick();
+        if window.is_key_pressed(Key::B, KeyRepeat::No) {
+            sound.toggle();
+        }
+        if sound.label() != previous_audio_label {
+            dirty = true;
+        }
         if transition.is_none() {
             if window.is_key_pressed(Key::M, KeyRepeat::No) {
                 inspection = if inspection.is_some() {
@@ -2574,12 +2519,14 @@ fn main() -> io::Result<()> {
                     active.moon_fill = moons.fill;
                     active.from_light = s.lights[0].0;
                     active.to_light = rig.position(next_id);
+                    sound.transition(id);
                     transition = Some(active);
                     transition_started = Instant::now();
                 }
             }
         }
-        let hud = hud_lines(&s, inspection, &moons, rig, transition.as_ref());
+        let mut hud = hud_lines(&s, inspection, &moons, rig, transition.as_ref());
+        hud.push(sound.label().into());
         if let Some(mut active) = transition {
             active.elapsed_ms = transition_started
                 .elapsed()
@@ -2603,6 +2550,7 @@ fn main() -> io::Result<()> {
             )?;
             if active.finished() {
                 id = active.to;
+                sound.arrive(id);
                 s = scene_with_charge(id, active.moon_fill);
                 rig.apply(&mut s);
                 cam = default_camera(id);
@@ -2635,6 +2583,10 @@ fn main() -> io::Result<()> {
         } else {
             window.update();
         }
+        ticks = ticks.saturating_add(1);
+        if smoke_frames.is_some_and(|limit| ticks >= limit) {
+            break;
+        }
     }
     Ok(())
 }
@@ -2642,6 +2594,40 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reference_worlds_are_voxel_and_keep_their_travel_landmarks() {
+        let galaxy = scene(1);
+        let castle = scene(2);
+        for world in [&galaxy, &castle] {
+            assert!(world.spheres.is_empty());
+            assert!(world.cubes.len() > 300);
+            assert!(world
+                .cubes
+                .iter()
+                .all(|c| c.max.x > c.min.x && c.max.y > c.min.y && c.max.z > c.min.z));
+        }
+        assert_eq!(castle.name, "Super Mario 64");
+        let near = |cube: &Cube, point: V| ((cube.min + cube.max) * 0.5 - point).len() < 0.15;
+        assert!(galaxy
+            .cubes
+            .iter()
+            .any(|c| c.material.kind == Kind::Star && near(c, worlds::GALAXY_EXIT)));
+        assert!(galaxy.cubes.iter().any(|c| c.material.kind == Kind::Skin));
+        assert!(castle
+            .cubes
+            .iter()
+            .any(|c| c.material.kind == Kind::Roof && c.max.y > 9.));
+        assert!(castle
+            .cubes
+            .iter()
+            .any(|c| c.material.kind == Kind::LakeWater));
+        assert!(castle
+            .cubes
+            .iter()
+            .any(|c| c.material.kind == Kind::LakeBed));
+        assert!(castle.cubes.iter().any(|c| c.material.kind == Kind::Dark
+            && near(c, worlds::CASTLE_EXIT - V::new(0., 0.12, 0.))));
+    }
     #[test]
     fn slab_hits_cube() {
         let c = Cube {

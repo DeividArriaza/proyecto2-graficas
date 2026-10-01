@@ -3,7 +3,14 @@
 **Fecha:** 2026-09-28
 **Stack:** Rust + raytracer por software (CPU)
 **Plazo:** 4 semanas
-**Concepto:** Tres dioramas conectados en ciclo — Mario Odyssey → Mario Galaxy → New Super Mario Bros. Wii → Mario Odyssey
+**Concepto actual:** Tres dioramas conectados en ciclo — Mario Odyssey → Mario Galaxy → Super Mario 64 → Mario Odyssey
+
+**Actualización 2026-10-01:** `Mario_Galaxy2.png` guía el planetoide voxel con rostro y
+gorra-jardín. `Mario64.png` reemplaza NSMB Wii por el castillo de Peach con jardines,
+foso, lago y puente. Se conserva Launch Star y tubería como vehículos de viaje.
+Ya hay síntesis original de tres ambientes y tres efectos, además de carga de WAV
+propios; no se incluyen grabaciones de Nintendo. Las menciones a NSMB Wii y audio
+pendiente en el plan original de abajo son antecedentes, no el estado vigente.
 
 ---
 
@@ -14,8 +21,8 @@ Tres escenas raytraceadas, cada una con identidad visual propia, unidas por tran
 | Origen | Vehículo de transición | Destino |
 |---|---|---|
 | **Odyssey** | Capi / la nave Odyssey despega | **Galaxy** |
-| **Galaxy** | Launch Star (estrella de lanzamiento) | **NSMB Wii** |
-| **NSMB Wii** | Tubería verde (el personaje entra al túnel) | **Odyssey** |
+| **Galaxy** | Launch Star (estrella de lanzamiento) | **Mario 64** |
+| **Mario 64** | Tubería verde (acercamiento de cámara al túnel) | **Odyssey** |
 
 No hay gameplay. El usuario orbita la cámara libremente dentro de un diorama y presiona una tecla para disparar la transición al siguiente.
 
