@@ -295,6 +295,7 @@ struct Cube {
     min: V,
     max: V,
     material: Material,
+    ship: bool,
 }
 #[derive(Clone, Copy)]
 struct Sphere {
@@ -487,6 +488,7 @@ struct Scene {
     lights: Vec<(V, V)>,
     yaw: f32,
     sky: u8,
+    moon_fill: f32,
 }
 
 #[derive(Clone)]
@@ -604,6 +606,7 @@ fn cube(out: &mut Vec<Cube>, center: V, size: V, k: Kind) {
         min: center - h,
         max: center + h,
         material: mat(k),
+        ship: false,
     });
 }
 fn sphere(out: &mut Vec<Sphere>, center: V, radius: f32, k: Kind) {
@@ -845,6 +848,10 @@ fn sand_kingdom(out: &mut Vec<Cube>) {
     }
 }
 fn scene(id: usize) -> Scene {
+    scene_with_charge(id, 0.5)
+}
+
+fn scene_with_charge(id: usize, fill: f32) -> Scene {
     let mut c = Vec::new();
     let mut spheres = Vec::new();
     match id % 3 {
@@ -1083,9 +1090,10 @@ fn scene(id: usize) -> Scene {
 
             // Stepped voxel sphere where the Odyssey stores Power Moons. Small
             // gaps between the cubes keep its block construction visible.
-            let globe_center = V::new(0., 5.22, -0.18);
-            let globe_cell = 0.40;
-            let globe_step = 0.40;
+            let scale = 0.55 + fill.clamp(0., 1.) * 0.90;
+            let globe_cell = 0.40 * scale;
+            let globe_step = globe_cell;
+            let globe_center = V::new(0., 4.22 + 2.5 * globe_cell, -0.18);
             for (layer, cells) in [
                 (0, &[(0, 0)][..]),
                 (1, &[(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)][..]),
@@ -1129,13 +1137,48 @@ fn scene(id: usize) -> Scene {
             );
             cube(
                 &mut c,
-                V::new(0., 6.47, -0.18),
+                V::new(
+                    0.,
+                    globe_center.y + 2. * globe_step + globe_cell * 0.5 + 0.25,
+                    -0.18,
+                ),
                 V::new(0.22, 0.22, 0.22),
                 Kind::Star,
             );
+            for cube in &mut c {
+                cube.ship = true;
+            }
             sand_kingdom(&mut c);
         }
         1 => {
+            // A five-point Launch Star built from a small voxel silhouette.
+            for (row, mask) in [
+                0b1000001u8,
+                0b1100011,
+                0b0111110,
+                0b0111110,
+                0b1111111,
+                0b0011100,
+                0b0001000,
+            ]
+            .iter()
+            .enumerate()
+            {
+                for x in 0..7 {
+                    if mask & (1 << x) != 0 {
+                        cube(
+                            &mut c,
+                            V::new(
+                                2.9 + (x as f32 - 3.) * 0.19,
+                                3.3 + (row as f32 - 3.) * 0.19,
+                                2.7,
+                            ),
+                            V::new(0.19, 0.19, 0.20),
+                            Kind::Star,
+                        );
+                    }
+                }
+            }
             // Layered planetoid: rocky caps, clouds and a tilted, irregular star orbit.
             sphere(&mut spheres, V::new(0., 1.9, 0.), 2.35, Kind::Planet);
             sphere(&mut spheres, V::new(-0.7, 3.42, 0.48), 0.7, Kind::Stone);
@@ -1252,11 +1295,27 @@ fn scene(id: usize) -> Scene {
                     V::new(1.0, 2.5, 1.0),
                     Kind::Pipe,
                 );
+                for dx in [-0.6, 0.6] {
+                    cube(
+                        &mut c,
+                        V::new(x + dx, 2.65, 1.6),
+                        V::new(0.45, 0.35, 1.65),
+                        Kind::Pipe,
+                    );
+                }
+                for dz in [-0.6, 0.6] {
+                    cube(
+                        &mut c,
+                        V::new(x, 2.65, 1.6 + dz),
+                        V::new(0.75, 0.35, 0.45),
+                        Kind::Pipe,
+                    );
+                }
                 cube(
                     &mut c,
-                    V::new(x, 2.65, 1.6),
-                    V::new(1.65, 0.35, 1.65),
-                    Kind::Pipe,
+                    V::new(x, 2.52, 1.6),
+                    V::new(0.72, 0.04, 0.72),
+                    Kind::Dark,
                 );
             }
             for x in [-2.0, 0.0, 2.0] {
@@ -1301,6 +1360,7 @@ fn scene(id: usize) -> Scene {
         lights,
         yaw: 0.,
         sky: (id % 3) as u8,
+        moon_fill: fill.clamp(0., 1.),
     }
 }
 
@@ -1353,6 +1413,75 @@ fn default_camera(id: usize) -> Camera {
             az: 0.75,
             el: 0.4,
         },
+    }
+}
+
+fn smoothstep(t: f32) -> f32 {
+    let t = t.clamp(0., 1.);
+    t * t * (3. - 2. * t)
+}
+
+#[derive(Clone, Copy, Default)]
+struct LightRig {
+    azimuth: f32,
+    elevation: f32,
+}
+impl LightRig {
+    fn position(self, id: usize) -> V {
+        let base = match id % 3 {
+            0 | 2 => V::new(-5., 8., 4.),
+            _ => V::new(-4., 7., 5.),
+        };
+        if self.azimuth == 0. && self.elevation == 0. {
+            return base;
+        }
+        let target = V::new(0., 1.5, 0.);
+        let offset = base - target;
+        let radius = offset.len();
+        let elevation = ((offset.y / radius).asin() + self.elevation).clamp(0.12, 1.4);
+        let azimuth = offset.z.atan2(offset.x) + self.azimuth;
+        target
+            + V::new(
+                radius * elevation.cos() * azimuth.cos(),
+                radius * elevation.sin(),
+                radius * elevation.cos() * azimuth.sin(),
+            )
+    }
+    fn apply(self, scene: &mut Scene) {
+        scene.lights[0].0 = self.position(scene.sky as usize);
+    }
+}
+
+struct MoonCharge {
+    count: u32,
+    fill: f32,
+    from: f32,
+    elapsed: f32,
+}
+impl MoonCharge {
+    fn new(count: u32) -> Self {
+        let count = count.min(20);
+        let fill = count as f32 / 20.;
+        Self {
+            count,
+            fill,
+            from: fill,
+            elapsed: 0.5,
+        }
+    }
+    fn change(&mut self, delta: i32) {
+        self.count = (self.count as i32 + delta).clamp(0, 20) as u32;
+        self.from = self.fill;
+        self.elapsed = 0.;
+    }
+    fn update(&mut self, dt: f32) -> bool {
+        if self.elapsed >= 0.5 {
+            return false;
+        }
+        self.elapsed = (self.elapsed + dt).min(0.5);
+        self.fill = self.from * (1. - smoothstep(self.elapsed / 0.5))
+            + self.count as f32 / 20. * smoothstep(self.elapsed / 0.5);
+        true
     }
 }
 fn sky(dir: V, id: u8) -> V {
@@ -1489,6 +1618,9 @@ struct WorldTransition {
     duration_ms: u32,
     from_camera: Camera,
     from_yaw: f32,
+    moon_fill: f32,
+    from_light: V,
+    to_light: V,
 }
 
 impl WorldTransition {
@@ -1504,6 +1636,9 @@ impl WorldTransition {
             duration_ms: (TRANSITION_DURATION * 1000.0) as u32,
             from_camera: camera,
             from_yaw: yaw,
+            moon_fill: 0.5,
+            from_light: LightRig::default().position(from),
+            to_light: LightRig::default().position(to),
         }
     }
 
@@ -1513,8 +1648,7 @@ impl WorldTransition {
 
     /// Cubic smoothstep keeps the start/end velocity at zero.
     fn eased_progress(self) -> f32 {
-        let t = self.progress();
-        t * t * (3.0 - 2.0 * t)
+        smoothstep(self.progress())
     }
 
     fn advance(&mut self, elapsed_ms: u32) {
@@ -1575,24 +1709,59 @@ fn render_transition(
     from_buffer: &mut [u32],
     to_buffer: &mut [u32],
 ) -> io::Result<u128> {
-    let from_scene = scene(transition.from);
-    let to_scene = scene(transition.to);
+    let mut from_scene = scene_with_charge(transition.from, transition.moon_fill);
+    let mut to_scene = scene_with_charge(transition.to, transition.moon_fill);
+    from_scene.lights[0].0 = transition.from_light;
+    to_scene.lights[0].0 = transition.to_light;
     let from_camera = transition.from_camera;
     let to_camera = default_camera(transition.to);
     let t = transition.eased_progress();
-    let camera = Camera {
-        target: from_camera.target.lerp(to_camera.target, t),
-        distance: from_camera.distance * (1.0 - t) + to_camera.distance * t,
-        az: from_camera.az * (1.0 - t) + to_camera.az * t,
-        el: from_camera.el * (1.0 - t) + to_camera.el * t,
-    };
-    let mut from_scene = from_scene;
-    let mut to_scene = to_scene;
     from_scene.yaw = transition.from_yaw * (1.0 - t);
-    to_scene.yaw *= t;
+    let lift = if transition.from == 0 { 6. * t * t } else { 0. };
+    if transition.from == 0 && t > 0. {
+        for cube in &mut from_scene.cubes {
+            if cube.ship {
+                cube.min.y += lift;
+                cube.max.y += lift;
+            }
+        }
+        for x in [-1.22, 1.22] {
+            cube(
+                &mut from_scene.cubes,
+                V::new(x, lift + 0.35 - t * 0.5, -2.62),
+                V::new(0.3, t * 1.5, 0.3),
+                Kind::Star,
+            );
+        }
+        from_scene.bvh = build_bvh(&mut from_scene.cubes);
+    } else if transition.from == 1 {
+        for cube in &mut from_scene.cubes {
+            if cube.material.kind == Kind::Star {
+                cube.material.emission = cube.material.emission * (1. + 8. * t * (1. - t));
+            }
+        }
+    }
+    let (exit_anchor, exit_distance, exit_elevation) = match transition.from {
+        0 => (V::new(0., 3.4 + lift, 0.), 4.5, 0.35),
+        1 => (V::new(2.9, 3.3, 2.7), 0.85, 0.25),
+        _ => (V::new(3.8, 2.50, 1.6), 0.60, 1.35),
+    };
+    let source_camera = Camera {
+        target: from_camera.target.lerp(ry(exit_anchor, from_scene.yaw), t),
+        distance: from_camera.distance * (1. - t) + exit_distance * t,
+        az: from_camera.az,
+        el: from_camera.el * (1. - t) + exit_elevation * t,
+    };
+    // Arrive from above the destination and settle into its default orbit.
+    let entry_camera = Camera {
+        target: to_camera.target + V::new(0., 1.2 * (1. - t), 0.),
+        distance: to_camera.distance + 4. * (1. - t),
+        az: to_camera.az + 0.25 * (1. - t),
+        el: to_camera.el + 0.25 * (1. - t),
+    };
     let started = Instant::now();
-    render_world(&from_scene, &camera, w, h, from_buffer)?;
-    render_world(&to_scene, &camera, w, h, to_buffer)?;
+    render_world(&from_scene, &source_camera, w, h, from_buffer)?;
+    render_world(&to_scene, &entry_camera, w, h, to_buffer)?;
     composite_transition(from_buffer, to_buffer, t, output);
     Ok(started.elapsed().as_millis())
 }
@@ -1682,6 +1851,150 @@ fn inspection_title(scene: &Scene, selected: Option<Kind>) -> String {
     }
 }
 
+fn next_material(scene: &Scene, current: Option<Kind>) -> Option<Kind> {
+    let kinds = scene_materials(scene);
+    if kinds.is_empty() {
+        return None;
+    }
+    let index = current
+        .and_then(|kind| kinds.iter().position(|k| *k == kind))
+        .map_or(0, |index| (index + 1) % kinds.len());
+    Some(kinds[index])
+}
+
+fn hud_lines(
+    scene: &Scene,
+    selected: Option<Kind>,
+    moons: &MoonCharge,
+    rig: LightRig,
+    transition: Option<&WorldTransition>,
+) -> Vec<String> {
+    let mut lines = vec![format!("{} | 1/2/3 N:ESCENA M:MATERIALES", scene.name)];
+    if let Some(transition) = transition {
+        let motif = match transition.from {
+            0 => "DESPEGUE ODYSSEY",
+            1 => "LAUNCH STAR",
+            _ => "TUBERIA",
+        };
+        lines.push(format!("TRANSICION: {motif}"));
+        return lines;
+    }
+    if let Some(kind) = selected {
+        let kinds = scene_materials(scene);
+        let index = kinds.iter().position(|k| *k == kind).unwrap_or(0) + 1;
+        let m = mat(kind);
+        lines.push(format!(
+            "MATERIAL {index}/{}: {} | TAB/T:SIGUIENTE M:SALIR",
+            kinds.len(),
+            kind.name()
+        ));
+        lines.push(format!(
+            "ALBEDO {:.2},{:.2},{:.2} SPEC {:.2} TRANSP {:.2} REFLEJO {:.2}",
+            m.albedo.x, m.albedo.y, m.albedo.z, m.specular, m.transparency, m.reflect
+        ));
+        lines.push("DIAGNOSTICO: M PARA VER LUZ Y REFLEXION".into());
+    } else {
+        lines.push("TAB/T:INSPECCION | +/-:ZOOM WASD:CAMARA R:ROTAR".into());
+    }
+    if scene.sky == 0 {
+        lines.push(format!(
+            "ENERGILUNAS {}/20 | Q:QUITAR E:ANADIR | GLOBO {:.0}%",
+            moons.count,
+            moons.fill * 100.
+        ));
+    }
+    lines.push(format!(
+        "LUZ J/L:AZ I/K:ALT H:RESET | GIRO {:.0} ALT {:.0}",
+        rig.azimuth.to_degrees(),
+        rig.elevation.to_degrees()
+    ));
+    lines
+}
+
+// Original compact bitmap alphabet for the on-screen controls and material label.
+fn glyph(c: char) -> [u8; 7] {
+    match c.to_ascii_uppercase() {
+        'A' => [14, 17, 17, 31, 17, 17, 17],
+        'B' => [30, 17, 17, 30, 17, 17, 30],
+        'C' => [14, 17, 16, 16, 16, 17, 14],
+        'D' => [30, 17, 17, 17, 17, 17, 30],
+        'E' => [31, 16, 16, 30, 16, 16, 31],
+        'F' => [31, 16, 16, 30, 16, 16, 16],
+        'G' => [14, 17, 16, 23, 17, 17, 14],
+        'H' => [17, 17, 17, 31, 17, 17, 17],
+        'I' => [14, 4, 4, 4, 4, 4, 14],
+        'J' => [7, 2, 2, 2, 2, 18, 12],
+        'K' => [17, 18, 20, 24, 20, 18, 17],
+        'L' => [16, 16, 16, 16, 16, 16, 31],
+        'M' => [17, 27, 21, 21, 17, 17, 17],
+        'N' => [17, 25, 21, 19, 17, 17, 17],
+        'O' => [14, 17, 17, 17, 17, 17, 14],
+        'P' => [30, 17, 17, 30, 16, 16, 16],
+        'Q' => [14, 17, 17, 17, 21, 18, 13],
+        'R' => [30, 17, 17, 30, 20, 18, 17],
+        'S' => [15, 16, 16, 14, 1, 1, 30],
+        'T' => [31, 4, 4, 4, 4, 4, 4],
+        'U' => [17, 17, 17, 17, 17, 17, 14],
+        'V' => [17, 17, 17, 17, 17, 10, 4],
+        'W' => [17, 17, 17, 21, 21, 21, 10],
+        'X' => [17, 17, 10, 4, 10, 17, 17],
+        'Y' => [17, 17, 10, 4, 4, 4, 4],
+        'Z' => [31, 1, 2, 4, 8, 16, 31],
+        '0' => [14, 17, 19, 21, 25, 17, 14],
+        '1' => [4, 12, 4, 4, 4, 4, 14],
+        '2' => [14, 17, 1, 2, 4, 8, 31],
+        '3' => [30, 1, 1, 14, 1, 1, 30],
+        '4' => [2, 6, 10, 18, 31, 2, 2],
+        '5' => [31, 16, 16, 30, 1, 1, 30],
+        '6' => [14, 16, 16, 30, 17, 17, 14],
+        '7' => [31, 1, 2, 4, 8, 8, 8],
+        '8' => [14, 17, 17, 14, 17, 17, 14],
+        '9' => [14, 17, 17, 15, 1, 1, 14],
+        ':' => [0, 4, 4, 0, 4, 4, 0],
+        '.' => [0, 0, 0, 0, 0, 4, 4],
+        ',' => [0, 0, 0, 0, 4, 4, 8],
+        '-' => [0, 0, 0, 31, 0, 0, 0],
+        '+' => [0, 4, 4, 31, 4, 4, 0],
+        '/' => [1, 2, 2, 4, 8, 8, 16],
+        '%' => [17, 2, 4, 8, 17, 0, 0],
+        '|' => [4, 4, 4, 4, 4, 4, 4],
+        _ => [0; 7],
+    }
+}
+
+fn draw_hud(buffer: &mut [u32], width: usize, height: usize, lines: &[String]) {
+    if width == 0 || height == 0 {
+        return;
+    }
+    let longest = lines.iter().map(|line| line.len()).max().unwrap_or(0);
+    let scale = if width >= longest * 12 + 16 { 2 } else { 1 };
+    let line_height = 9 * scale;
+    let top = height.saturating_sub(lines.len() * line_height + 8);
+    for pixel in &mut buffer[top * width..] {
+        *pixel = 0x12_18_20;
+    }
+    for (line, text) in lines.iter().enumerate() {
+        for (col, character) in text.chars().enumerate() {
+            for (row, bits) in glyph(character).iter().enumerate() {
+                for bit in 0..5 {
+                    if bits & (1 << (4 - bit)) == 0 {
+                        continue;
+                    }
+                    for dy in 0..scale {
+                        for dx in 0..scale {
+                            let x = 4 + col * 6 * scale + bit * scale + dx;
+                            let y = top + 4 + line * line_height + row * scale + dy;
+                            if x < width && y < height {
+                                buffer[y * width + x] = 0xff_e1_98;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn scale_letterboxed(
     source: &[u32],
     source_width: usize,
@@ -1729,6 +2042,7 @@ fn present_frame(
     source_width: usize,
     source_height: usize,
     presentation: &mut Vec<u32>,
+    hud: &[String],
 ) -> io::Result<(usize, usize)> {
     let (window_width, window_height) = window.get_size();
     if window_width == 0 || window_height == 0 {
@@ -1743,6 +2057,7 @@ fn present_frame(
         window_width,
         window_height,
     );
+    draw_hud(presentation, window_width, window_height, hud);
     window
         .update_with_buffer(presentation, window_width, window_height)
         .map_err(|error| io::Error::other(error.to_string()))?;
@@ -1826,9 +2141,13 @@ fn export_render(
     h: u32,
     output: &Path,
     inspection: Option<Kind>,
+    hud: Option<&[String]>,
 ) -> io::Result<()> {
     let mut buffer = vec![0; (w * h) as usize];
     let (ms, avg) = render_frame_mode(scene, cam, w, h, 1., &mut buffer, inspection)?;
+    if let Some(hud) = hud {
+        draw_hud(&mut buffer, w as usize, h as usize, hud);
+    }
     if inspection.is_some() {
         println!("INSPECTION {}", inspection_title(scene, inspection));
     }
@@ -1903,6 +2222,8 @@ fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Resul
     let from = benchmark_scene.sky as usize;
     let to = (from + 1) % 3;
     let mut transition = WorldTransition::from_view(from, to, camera, benchmark_scene.yaw);
+    transition.moon_fill = benchmark_scene.moon_fill;
+    transition.from_light = benchmark_scene.lights[0].0;
     let mut transition_output = vec![0; (w * h) as usize];
     let mut transition_from = vec![0; (w * h) as usize];
     let mut transition_to = vec![0; (w * h) as usize];
@@ -1998,7 +2319,8 @@ fn usage() {
     println!("Benchmark: cargo run --release -- --benchmark --scene 0 [--width N] [--height N]");
     println!("Demo headless: cargo run -- --transition-demo DIR [--width N] [--height N]");
     println!("Inspección: --inspect-material sand|metal|water|stucco-teal (con --headless y --output, o interactivo)");
-    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, M inspeccionar, Tab siguiente material, N/1/2/3 cambiar escena, Escape salir.");
+    println!("Estado: --moons 0..20 --light-azimuth GRADOS --light-elevation GRADOS; --hud incluye el panel en exportación headless.");
+    println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, M inspeccionar, Tab/T iniciar o recorrer materiales, J/L luz horizontal, I/K luz vertical, H restablecer luz, Q/E quitar/añadir energilunas, N/1/2/3 cambiar escena, Escape salir.");
 }
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -2014,6 +2336,9 @@ fn main() -> io::Result<()> {
     let mut do_benchmark = false;
     let mut demo_dir = None;
     let mut inspection = None;
+    let mut moon_count = 10;
+    let mut rig = LightRig::default();
+    let mut export_hud = false;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -2040,6 +2365,39 @@ fn main() -> io::Result<()> {
                 demo_dir = Some(args[i].clone())
             }
             "--interactive" => headless = false,
+            "--moons" => {
+                i += 1;
+                moon_count = args
+                    .get(i)
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .filter(|n| *n <= 20)
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "--moons requiere un entero de 0 a 20",
+                        )
+                    })?;
+            }
+            "--light-azimuth" | "--light-elevation" => {
+                let azimuth = args[i] == "--light-azimuth";
+                i += 1;
+                let degrees = args
+                    .get(i)
+                    .and_then(|s| s.parse::<f32>().ok())
+                    .filter(|n| n.is_finite())
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "el angulo de luz debe ser finito, en grados",
+                        )
+                    })?;
+                if azimuth {
+                    rig.azimuth = degrees.to_radians();
+                } else {
+                    rig.elevation = degrees.to_radians().clamp(-0.7, 0.6);
+                }
+            }
+            "--hud" => export_hud = true,
             "--inspect-material" => {
                 i += 1;
                 let name = args.get(i).ok_or_else(|| {
@@ -2062,7 +2420,9 @@ fn main() -> io::Result<()> {
         i += 1;
     }
     let mut cam = default_camera(id);
-    let mut s = scene(id);
+    let mut moons = MoonCharge::new(moon_count);
+    let mut s = scene_with_charge(id, moons.fill);
+    rig.apply(&mut s);
     if inspection.is_some_and(|kind| !scene_materials(&s).contains(&kind)) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -2082,7 +2442,16 @@ fn main() -> io::Result<()> {
                 "--headless requiere --output; no se crea render.ppm por defecto",
             ));
         };
-        export_render(&s, &cam, w, h, Path::new(&output), inspection)?;
+        let hud = hud_lines(&s, inspection, &moons, rig, None);
+        export_render(
+            &s,
+            &cam,
+            w,
+            h,
+            Path::new(&output),
+            inspection,
+            export_hud.then_some(hud.as_slice()),
+        )?;
         return Ok(());
     }
     let mut window = Window::new(
@@ -2126,16 +2495,44 @@ fn main() -> io::Result<()> {
                 println!("{}", inspection_title(&s, inspection));
                 dirty = true;
             }
-            if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
-                if let Some(kind) = inspection {
-                    let kinds = scene_materials(&s);
-                    let next =
-                        (kinds.iter().position(|k| *k == kind).unwrap_or(0) + 1) % kinds.len();
-                    inspection = Some(kinds[next]);
-                    window.set_title(&inspection_title(&s, inspection));
-                    println!("{}", inspection_title(&s, inspection));
-                    dirty = true;
+            if window.is_key_pressed(Key::Tab, KeyRepeat::No)
+                || window.is_key_pressed(Key::T, KeyRepeat::No)
+            {
+                inspection = next_material(&s, inspection);
+                window.set_title(&inspection_title(&s, inspection));
+                println!("{}", inspection_title(&s, inspection));
+                dirty = true;
+            }
+            if s.sky == 0 {
+                if window.is_key_pressed(Key::E, KeyRepeat::No) {
+                    moons.change(1);
                 }
+                if window.is_key_pressed(Key::Q, KeyRepeat::No) {
+                    moons.change(-1);
+                }
+            }
+            if moons.update(elapsed.as_secs_f32()) && s.sky == 0 {
+                let yaw = s.yaw;
+                s = scene_with_charge(id, moons.fill);
+                s.yaw = yaw;
+                rig.apply(&mut s);
+                dirty = true;
+            }
+            let azimuth_delta =
+                i32::from(window.is_key_down(Key::L)) - i32::from(window.is_key_down(Key::J));
+            let elevation_delta =
+                i32::from(window.is_key_down(Key::I)) - i32::from(window.is_key_down(Key::K));
+            if azimuth_delta != 0 || elevation_delta != 0 {
+                rig.azimuth += azimuth_delta as f32 * dt;
+                rig.elevation =
+                    (rig.elevation + elevation_delta as f32 * dt * 0.7).clamp(-0.7, 0.6);
+                rig.apply(&mut s);
+                dirty = true;
+            }
+            if window.is_key_pressed(Key::H, KeyRepeat::No) {
+                rig = LightRig::default();
+                rig.apply(&mut s);
+                dirty = true;
             }
             if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
                 cam.az -= 1.8 * dt;
@@ -2173,11 +2570,16 @@ fn main() -> io::Result<()> {
             if let Some(next_id) = requested_world(id, requested) {
                 if next_id != id {
                     inspection = None;
-                    transition = Some(WorldTransition::from_view(id, next_id, cam, s.yaw));
+                    let mut active = WorldTransition::from_view(id, next_id, cam, s.yaw);
+                    active.moon_fill = moons.fill;
+                    active.from_light = s.lights[0].0;
+                    active.to_light = rig.position(next_id);
+                    transition = Some(active);
                     transition_started = Instant::now();
                 }
             }
         }
+        let hud = hud_lines(&s, inspection, &moons, rig, transition.as_ref());
         if let Some(mut active) = transition {
             active.elapsed_ms = transition_started
                 .elapsed()
@@ -2197,13 +2599,15 @@ fn main() -> io::Result<()> {
                 w as usize,
                 h as usize,
                 &mut presentation,
+                &hud,
             )?;
             if active.finished() {
                 id = active.to;
-                s = scene(id);
+                s = scene_with_charge(id, active.moon_fill);
+                rig.apply(&mut s);
                 cam = default_camera(id);
                 window.set_title(&inspection_title(&s, None));
-                dirty = false;
+                dirty = true;
                 transition = None;
             } else {
                 transition = Some(active);
@@ -2216,6 +2620,7 @@ fn main() -> io::Result<()> {
                 w as usize,
                 h as usize,
                 &mut presentation,
+                &hud,
             )?;
             dirty = false;
         } else if window.get_size() != presented_size {
@@ -2225,6 +2630,7 @@ fn main() -> io::Result<()> {
                 w as usize,
                 h as usize,
                 &mut presentation,
+                &hud,
             )?;
         } else {
             window.update();
@@ -2242,6 +2648,7 @@ mod tests {
             min: V::new(-1., -1., -1.),
             max: V::new(1., 1., 1.),
             material: mat(Kind::Stone),
+            ship: false,
         };
         let h = hit_cube(
             c,
@@ -2402,12 +2809,21 @@ mod tests {
                 if from == to {
                     continue;
                 }
-                let mut source = scene(from);
+                let fill = 0.9;
+                let rig = LightRig {
+                    azimuth: 0.5,
+                    elevation: 0.2,
+                };
+                let mut source = scene_with_charge(from, fill);
+                rig.apply(&mut source);
                 source.yaw = 0.65;
                 let mut camera = default_camera(from);
                 camera.az += 0.7;
                 camera.distance += 1.;
                 let mut transition = WorldTransition::from_view(from, to, camera, source.yaw);
+                transition.moon_fill = fill;
+                transition.from_light = source.lights[0].0;
+                transition.to_light = rig.position(to);
                 let mut expected = vec![0; 32 * 24];
                 let mut output = expected.clone();
                 let mut a = expected.clone();
@@ -2419,7 +2835,9 @@ mod tests {
                     "start of {from} -> {to} must preserve the view"
                 );
                 transition.advance(800);
-                render_world(&scene(to), &default_camera(to), 32, 24, &mut expected).unwrap();
+                let mut destination = scene_with_charge(to, fill);
+                rig.apply(&mut destination);
+                render_world(&destination, &default_camera(to), 32, 24, &mut expected).unwrap();
                 render_transition(&transition, 32, 24, &mut output, &mut a, &mut b).unwrap();
                 assert_eq!(
                     output, expected,
@@ -2435,6 +2853,7 @@ mod tests {
             min: V::new(-0.5, -0.5, 2.),
             max: V::new(0.5, 0.5, 3.),
             material: mat(Kind::Stone),
+            ship: false,
         };
         let mut cubes = vec![blocker];
         let bvh = build_bvh(&mut cubes);
@@ -2446,6 +2865,7 @@ mod tests {
             lights: vec![(V::new(0., 0., 5.), V::new(1., 1., 1.))],
             yaw: 0.,
             sky: 0,
+            moon_fill: 0.5,
         };
         assert!(!visible(&scene, V::new(0., 0., 0.), V::new(0., 0., 5.)));
         assert!(visible(&scene, V::new(2., 0., 0.), V::new(0., 0., 5.)));
@@ -2508,6 +2928,77 @@ mod tests {
         render_frame_mode(&scene, &camera, 64, 48, 1., &mut metal, Some(Kind::Metal)).unwrap();
         assert_ne!(framebuffer_hash(&sand), framebuffer_hash(&metal));
         assert!(inspection_title(&scene, Some(Kind::Water)).contains("transparencia=0.62"));
+    }
+
+    #[test]
+    fn material_cycle_starts_without_m_and_hud_displays_selection() {
+        let scene = scene(0);
+        let kinds = scene_materials(&scene);
+        let mut selected = None;
+        for &kind in &kinds {
+            selected = next_material(&scene, selected);
+            assert_eq!(selected, Some(kind));
+        }
+        assert_eq!(next_material(&scene, selected), Some(kinds[0]));
+        let lines = hud_lines(
+            &scene,
+            Some(Kind::Water),
+            &MoonCharge::new(10),
+            LightRig::default(),
+            None,
+        );
+        assert!(lines
+            .iter()
+            .any(|line| line.contains("water") && line.contains("MATERIAL")));
+        let mut pixels = vec![0; 640 * 480];
+        draw_hud(&mut pixels, 640, 480, &lines);
+        assert!(pixels.contains(&0xff_e1_98));
+    }
+
+    #[test]
+    fn moon_charge_animates_continuously_with_bounded_voxel_size() {
+        let mut charge = MoonCharge::new(10);
+        charge.change(20);
+        assert_eq!(charge.count, 20);
+        assert_eq!(charge.fill, 0.5);
+        charge.update(0.25);
+        assert!(charge.fill > 0.5 && charge.fill < 1.);
+        charge.update(0.25);
+        assert_eq!(charge.fill, 1.);
+        charge.change(-100);
+        charge.update(0.5);
+        assert_eq!(charge.fill, 0.);
+        assert!(!charge.update(1.));
+        let small = scene_with_charge(0, 0.);
+        let full = scene_with_charge(0, 1.);
+        assert_eq!(small.cubes.len(), full.cubes.len());
+        let top = |scene: &Scene| {
+            scene
+                .cubes
+                .iter()
+                .filter(|c| c.ship)
+                .map(|c| c.max.y)
+                .fold(0., f32::max)
+        };
+        assert!(top(&full) > top(&small) + 1.5);
+    }
+
+    #[test]
+    fn moving_key_light_changes_frame_and_preserves_fill_lights() {
+        let mut scene = scene(0);
+        let fills = scene.lights[1..].to_vec();
+        let cam = default_camera(0);
+        let mut before = vec![0; 64 * 48];
+        let mut after = before.clone();
+        render_world(&scene, &cam, 64, 48, &mut before).unwrap();
+        LightRig {
+            azimuth: 1.,
+            elevation: -0.25,
+        }
+        .apply(&mut scene);
+        render_world(&scene, &cam, 64, 48, &mut after).unwrap();
+        assert_ne!(framebuffer_hash(&before), framebuffer_hash(&after));
+        assert_eq!(scene.lights[1..], fills);
     }
 
     #[test]

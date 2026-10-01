@@ -5,14 +5,14 @@
   "mode": "headless release",
   "hash_algorithm": "framebuffer_hash RGB888 u32",
   "frames": [
-    {"scene": 0, "file": "odyssey.png", "hash": "73830c551fd6e9a6", "render_ms": 52},
-    {"scene": 1, "file": "galaxy.png", "hash": "d989d312f3fa8f4a", "render_ms": 15},
-    {"scene": 2, "file": "nsmb-wii.png", "hash": "315117a57dc45166", "render_ms": 53}
+    {"scene": 0, "file": "odyssey.png", "hash": "73830c551fd6e9a6", "render_ms": 54},
+    {"scene": 1, "file": "galaxy.png", "hash": "365e6c814af86f72", "render_ms": 17},
+    {"scene": 2, "file": "nsmb-wii.png", "hash": "1009824528ca8e2c", "render_ms": 55}
   ],
   "benchmark_resolution": [320, 240],
   "benchmark": [
-    {"scene": 0, "orbit_fps": 81.63, "transition_fps": 46.68, "transition_to": 1},
-    {"scene": 1, "orbit_fps": 324.32, "transition_fps": 57.91, "transition_to": 2},
-    {"scene": 2, "orbit_fps": 96.77, "transition_fps": 41.10, "transition_to": 0}
+    {"scene": 0, "orbit_fps": 77.92, "transition_fps": 34.97, "transition_to": 1},
+    {"scene": 1, "orbit_fps": 255.32, "transition_fps": 48.81, "transition_to": 2},
+    {"scene": 2, "orbit_fps": 93.75, "transition_fps": 23.90, "transition_to": 0}
   ]
 }

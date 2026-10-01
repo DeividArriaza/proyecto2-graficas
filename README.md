@@ -20,7 +20,11 @@ Controles:
 | `+` / `-` mantenidas | Zoom continuo |
 | `R` mantenida | Rotar el diorama continuamente |
 | `M` | Activar/desactivar inspección de materiales |
-| `Tab` | Recorrer los materiales de la escena mientras se inspecciona |
+| `Tab` / `T` | Abrir la inspección directamente o recorrer los materiales presentes |
+| `J` / `L` mantenidas | Cambiar el ángulo horizontal de la luz principal |
+| `I` / `K` mantenidas | Subir/bajar el ángulo de la luz principal |
+| `H` | Restablecer la iluminación original del mundo |
+| `Q` / `E` | Quitar/añadir una energiluna en Odyssey (0–20) |
 | `N` | Transición al siguiente mundo: Odyssey → Galaxy → NSMB Wii → Odyssey |
 | `1` / `2` / `3` | Transición directa a Odyssey / Galaxy / NSMB Wii |
 | `F11` | Sin acción: minifb 0.26 no ofrece una API pública y verificable para fullscreen |
@@ -64,9 +68,10 @@ claro), `dark` (acabado oscuro) y `star` (dorado emisivo). Cada uno tiene su pro
 configuración; la rúbrica puntúa como máximo cinco materiales, no limita la cantidad.
 
 Al activar `M`, el material elegido conserva su textura con contornos dorados y el
-resto de la escena se muestra gris. `Tab` selecciona el siguiente material presente.
-El nombre y los cuatro parámetros aparecen en el título de la ventana y se imprimen
-en la terminal. Rotación y zoom siguen disponibles; iniciar una transición sale de
+resto de la escena se muestra gris. Antes `Tab` requería activar `M`: ahora `Tab` o
+`T` abre directamente el inspector y las siguientes pulsaciones recorren los materiales.
+El nombre, índice y los cuatro parámetros aparecen en un panel dentro de la ventana,
+además del título y la terminal. `M` sale de la inspección. Rotación y zoom siguen disponibles; iniciar una transición sale de
 la inspección y vuelve al render normal de los tres mundos.
 
 La inspección también se puede exportar sin ventana:
@@ -78,6 +83,34 @@ cargo run --release -- --headless --scene 0 --inspect-material water --width 640
 
 Se rechazan nombres desconocidos y materiales que no estén presentes en la escena.
 Las capturas de inspección de entrega están en `artifacts/inspection/`.
+
+## Luz y energilunas interactivas
+
+`J/L` gira la luz principal alrededor del diorama y `I/K` cambia su elevación,
+con límites para mantenerla sobre el horizonte. `H` restablece sus ángulos.
+Las luces de relleno y contorno permanecen fijas. Los desplazamientos angulares se
+conservan al viajar entre mundos. El panel muestra sus valores en grados.
+Para apreciar sombras y reflejos hay que salir del inspector con `M`: este es diagnóstico,
+no una vista de iluminación física.
+
+En Odyssey, cada pulsación de `E` añade una energiluna y `Q` quita una, hasta
+un máximo de 20. El globo sigue formado por 21 cubos y cambia de tamaño con
+smoothstep durante **0.5 s**, manteniendo fija su base; no se convierte en esfera.
+Comienza con 10 energilunas. El panel muestra cantidad y porcentaje de llenado.
+El estado se conserva al regresar a Odyssey y se congela durante el viaje.
+Es una interacción simbólica de llenado, no una mecánica de recolección de personajes.
+
+Estos estados se pueden reproducir sin ventana; los ángulos son desplazamientos
+en grados respecto a la luz original y `--hud` incluye el panel en el PNG:
+
+```bash
+cargo run --release -- --headless --scene 0 --moons 0 --hud --width 640 --height 480 --output /tmp/globo-vacio.png
+cargo run --release -- --headless --scene 0 --moons 20 --hud --width 640 --height 480 --output /tmp/globo-lleno.png
+cargo run --release -- --headless --scene 0 --light-azimuth 70 --light-elevation -10 --hud --width 640 --height 480 --output /tmp/luz-lateral.png
+cargo run --release -- --headless --scene 0 --inspect-material water --hud --width 640 --height 480 --output /tmp/material-panel.png
+```
+
+Capturas y hashes: [controles interactivos](artifacts/controls/manifest.json).
 
 ![Bloques de arena resaltados en el inspector](artifacts/inspection/sand.png)
 
@@ -122,6 +155,13 @@ crossfade y un fundido a negro leve. La transición captura la cámara y la rota
 al salir, de modo que orbitar, hacer zoom o girar antes de cambiar mundo no causa un
 salto a la vista predeterminada. Durante la transición se suspende el control de cámara
 y se usa el tiempo transcurrido real, sin el límite de delta-time del movimiento manual.
+La salida depende del mundo origen: Odyssey despega físicamente con sus bloques y
+un escape voxel, Galaxy acerca la cámara a una Launch Star construida con cubos y
+un pulso emisivo, y NSMB acerca la cámara a una tubería con borde hueco. La llegada
+parte de una cámara elevada y más distante y se asienta en la vista del destino.
+Son motivos escénicos del viaje, sin personajes ni animación de Mario. La luz elegida
+y el llenado del globo se conservan. Los extremos del crossfade coinciden exactamente
+con los renders normales, incluso después de orbitar, girar o personalizar esos estados.
 Mientras una transición está
 activa, `N` y `1/2/3` se ignoran de forma determinista (no se encolan ni reinician); al
 terminar, el mundo destino queda activo. Esc sigue cerrando la ventana y no se genera
@@ -147,16 +187,17 @@ Medición del 2026-10-01 en release a 320×240 (render CPU, variable según el e
 
 | Mundo | Órbita FPS | Transición al siguiente FPS |
 | --- | ---: | ---: |
-| Odyssey | 81.63 | 46.68 |
-| Galaxy | 324.32 | 57.91 |
-| NSMB Wii | 96.77 | 41.10 |
+| Odyssey | 77.92 | 34.97 |
+| Galaxy | 255.32 | 48.81 |
+| NSMB Wii | 93.75 | 23.90 |
 
 Cada benchmark mide ahora la transición que sale del mundo elegido, conservando su
-cámara orbital final. Las 17 pruebas incluyen la continuidad del primer y último
+cámara orbital final. Las 20 pruebas incluyen la continuidad del primer y último
 frame para las seis combinaciones de mundos, después de orbitar y rotar la escena.
 La BVH se verifica comparando impactos y sombras contra la búsqueda lineal en los
 tres mundos rotados. También se prueba que la inspección distingue materiales y
-muestra sus parámetros.
+muestra sus parámetros; se prueban también el HUD, el llenado continuo y acotado del
+globo, y la modificación de la luz principal sin alterar las luces auxiliares.
 
 La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
 (Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la
@@ -210,7 +251,7 @@ casas coloridas de cúpulas escalonadas, oasis, cactus, ruinas y cielo azul.
 La nave conserva casco crema y
 rojo escalonado, proa por capas, cabina/copa roja alta con bandas, ventanas blancas,
 faro frontal facetado de cubos, barandas, mástil/bandera, cola con propulsores y un globo
-superior ampliado aproximadamente un 60 %, formado por 21 cubos dorados apilados.
+superior formado por 21 cubos dorados apilados, con tamaño regulable mediante energilunas.
 Odyssey no usa esferas: la silueta es un modelo
 voxel AABB inspirado en las capturas de referencia. Galaxy combina océano,
 continentes, accidentes y órbita inclinada; NSMB Wii muestra puerta, almenas, banderas,
@@ -220,8 +261,11 @@ Esos archivos son referencias históricas anteriores al globo ampliado y al ento
 desértico. Para obtener la escena actual, exportar un render con `--headless`.
 
 El dip negro de transición está limitado a 7 %, para que el frame medio siga mostrando
-los dos mundos. La calidad sigue siendo procedural y estilizada: no hay modelos,
-texturas pintadas, antialiasing ni bloom, y no se validó una ventana real sin display/Xvfb.
+los dos mundos. La calidad sigue siendo procedural y estilizada: no hay modelos
+importados, texturas pintadas, antialiasing ni bloom. La ventana real pasó una prueba
+de arranque de 5 segundos sin segfault (terminada con `timeout`, código 124);
+Wayland todavía imprime el aviso no fatal de decoración ausente. Las teclas se validan
+por sus funciones de estado y renders automatizados, no por una prueba manual completa.
 
 La estética sigue siendo estilizada y procedural: no hay modelos ni texturas pintadas a
 mano, bloom, antialiasing, ni assets de personajes. Es una mejora de legibilidad y
