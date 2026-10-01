@@ -17,8 +17,15 @@ La reproducción usa `pw-play` o `aplay` del sistema, sin nuevas dependencias Ca
 si falla el dispositivo, el render continúa sin sonido. Headless y benchmarks no
 inician audio. Los WAV temporales y procesos propios se limpian al cerrar normalmente.
 
+`src/transitions.rs` prepara escenas/BVH una vez por viaje, actualiza los límites
+de la BVH al despegar y reduce progresivamente la resolución hasta 160×120 durante
+el movimiento, recuperando 320×240 en los extremos exactos. Conserva 0.8 s y todos
+los anclajes. No volver a reconstruir escenas ni ordenar cubos por frame.
+Los seis WAV propios en `assets/audio/` se detectan automáticamente al ejecutar
+desde la raíz; los nombres y formato están en `assets/audio/README.md`.
+
 README y los manifests actuales contienen los controles y resultados vigentes
-(23 pruebas y benchmarks de órbita/transición superiores a 10 FPS de promedio).
+(25 pruebas y benchmarks de órbita/transición superiores a 10 FPS de promedio).
 Las menciones a NSMB Wii y los estados iniciales del resto de este handoff son
 antecedentes históricos; no deben revertir esta actualización del usuario.
 

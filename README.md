@@ -156,14 +156,23 @@ Los WAV sintetizados viven en un directorio temporal propio que se limpia al sal
 una terminación forzada del proceso puede impedir esa limpieza. Headless y benchmarks
 no abren audio ni generan WAV.
 
-Para usar tus canciones y efectos en formato WAV compatible con el reproductor,
-creá una carpeta fuera del repositorio con estos seis nombres:
+Para usar tus canciones y efectos, colocá los seis archivos WAV en
+[`assets/audio/`](assets/audio/README.md), dentro del repositorio. Al ejecutar
+`cargo run --release` desde la raíz se detectan automáticamente cuando están los seis.
+Si la carpeta está incompleta, se muestra un aviso y se conservan los sonidos originales.
+También podés usar otra carpeta mediante `--audio-dir /ruta/a/mis/audios`.
 
 | Ambiente | Efecto al salir |
 | --- | --- |
 | `odyssey.wav` | `odyssey-transition.wav` |
 | `galaxy.wav` | `galaxy-transition.wav` |
 | `mario64.wav` | `mario64-transition.wav` |
+
+Formato recomendado: WAV PCM de 16 bits, mono o estéreo, a 22050/44100/48000 Hz.
+Las músicas se repiten y los efectos deberían durar aproximadamente 0.8 s, pues
+se detienen al llegar. El efecto corresponde al mundo del que salís.
+No basta con renombrar un MP3: hay que convertirlo a WAV. Los WAV están ignorados
+por Git; copiarlos aquí no los publica en GitHub.
 
 Podés exportar primero los seis audios originales y reemplazar únicamente las pistas
 que quieras con grabaciones que tengas permiso de usar. El exportador rechaza destinos
@@ -220,7 +229,7 @@ Se consultó directamente la rama pública [`18-RT-06-REFLECTIONS`](https://gith
 La ventana rerenderiza cuando cambia la cámara o la escena; las teclas mantenidas usan
 delta-time para movimiento continuo. `WorldTransition` conserva explícitamente mundo
 origen/destino, progreso acotado `0..1`, cámara interpolada y duración fija de **0.8 s**.
-Cada frame renderiza ambos mundos, aplica easing smoothstep y compone sus framebuffers con
+Los frames intermedios renderizan ambos mundos, aplican easing smoothstep y componen sus framebuffers con
 crossfade y un fundido a negro leve. La transición captura la cámara y la rotación actuales
 al salir, de modo que orbitar, hacer zoom o girar antes de cambiar mundo no causa un
 salto a la vista predeterminada. Durante la transición se suspende el control de cámara
@@ -236,6 +245,16 @@ Mientras una transición está
 activa, `N` y `1/2/3` se ignoran de forma determinista (no se encolan ni reinician); al
 terminar, el mundo destino queda activo. Esc sigue cerrando la ventana y no se genera
 `render.ppm` por defecto.
+`src/transitions.rs` prepara las dos escenas/BVH una vez antes del viaje y reutiliza
+sus buffers. El despegue actualiza límites de la BVH sin reconstruir ni ordenar
+los bloques; el pulso de Galaxy parte de los valores originales para no acumularse.
+La resolución se reduce progresivamente durante el primer 8 % del viaje hasta la
+mitad de ancho y alto (**160×120** para el render habitual de 320×240), y vuelve
+progresivamente a la resolución completa durante el último 8 %. Se escala el
+resultado al framebuffer habitual; el HUD se dibuja después a resolución de ventana.
+Se intercambia algo de detalle temporal por fluidez, sin alterar la calidad en reposo.
+En los extremos sólo se renderiza el mundo visible y al llegar se reutiliza la escena
+destino ya preparada. No se reproducen imágenes precalculadas ni se cambia la duración.
 Rayon paraleliza las filas del framebuffer. Reflexión conserva la energía local/reflejada,
 refracción usa Schlick y maneja reflexión interna total; sombras, texturas y skyboxes
 siguen resolviéndose en `trace`.
@@ -257,14 +276,20 @@ Medición del 2026-10-01 en release a 320×240 (render CPU, variable según el e
 
 | Mundo | Órbita FPS | Transición al siguiente FPS |
 | --- | ---: | ---: |
-| Odyssey | 63.49 | 23.58 |
-| Galaxy | 93.75 | 18.20 |
-| Mario 64 | 44.12 | 11.69 |
+| Odyssey | 72.73 | 97.86 |
+| Galaxy | 116.50 | 82.75 |
+| Mario 64 | 54.55 | 55.62 |
+
+Antes de preparar las escenas y adaptar la resolución, la transición de Mario 64
+a Odyssey promediaba 11.69 FPS; esta revisión midió 55.62 FPS. La ventana limita
+la presentación a 60 FPS y los valores del benchmark no garantizan esa tasa en
+otros equipos; la mejora se obtiene reduciendo trabajo, no alargando el viaje.
 
 Cada benchmark mide ahora la transición que sale del mundo elegido, conservando su
-cámara orbital final e incluyendo reconstrucción de escenas/BVH, no sólo el trazado.
+cámara orbital final e incluyendo la preparación única de escenas/BVH, los renders
+adaptativos y el escalado, no sólo el trazado.
 Los FPS son promedios de la secuencia, no un mínimo por frame; varían según el equipo.
-Las 23 pruebas incluyen la continuidad del primer y último
+Las 25 pruebas incluyen la continuidad del primer y último
 frame para las seis combinaciones de mundos, después de orbitar y rotar la escena.
 La BVH se verifica comparando impactos y sombras contra la búsqueda lineal en los
 tres mundos rotados. También se prueba que la inspección distingue materiales y
@@ -273,6 +298,9 @@ globo, y la modificación de la luz principal sin alterar las luces auxiliares.
 Las nuevas pruebas verifican los dos mundos voxel y sus anclajes de viaje, seis
 audios distintos y acotados, duración de efectos, silencio, estado del ciclo y
 limpieza de temporales propios sin sobrescribir archivos existentes.
+También se comprueba la resolución adaptativa, la recuperación de calidad en los
+extremos y la igualdad de la BVH actualizada respecto a una reconstruida, sin
+acumulación de movimiento/emisión ni crecimiento de geometría durante el viaje.
 
 La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
 (Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la

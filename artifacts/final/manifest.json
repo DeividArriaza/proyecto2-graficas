@@ -11,12 +11,14 @@
   ],
   "benchmark_resolution": [320, 240],
   "benchmark": [
-    {"scene": 0, "orbit_fps": 63.49, "transition_fps": 23.58, "transition_to": 1},
-    {"scene": 1, "orbit_fps": 93.75, "transition_fps": 18.20, "transition_to": 2},
-    {"scene": 2, "orbit_fps": 44.12, "transition_fps": 11.69, "transition_to": 0}
+    {"scene": 0, "orbit_fps": 72.73, "transition_fps": 97.86, "transition_to": 1},
+    {"scene": 1, "orbit_fps": 116.50, "transition_fps": 82.75, "transition_to": 2},
+    {"scene": 2, "orbit_fps": 54.55, "transition_fps": 55.62, "transition_to": 0}
   ],
-  "transition_timing": "includes scene and BVH reconstruction; average FPS, not per-frame minimum",
+  "transition_timing": "includes one-time scene/BVH preparation, adaptive renders and upscaling; average FPS, not per-frame minimum",
+  "minimum_transition_internal_resolution": [160, 120],
+  "previous_mario64_transition_fps": 11.69,
   "references": ["Mario_Galaxy2.png", "Mario64.png"],
   "historical_frame": "nsmb-wii.png is retained as history, not the active third world",
-  "unit_tests_passed": 23
+  "unit_tests_passed": 25
 }

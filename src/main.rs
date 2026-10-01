@@ -10,6 +10,7 @@ use minifb::{Key, KeyRepeat, Scale, ScaleMode, Window, WindowOptions};
 use rayon::prelude::*;
 
 mod audio;
+mod transitions;
 mod worlds;
 
 const EPS: f32 = 0.001;
@@ -1587,72 +1588,17 @@ fn render_world(
     render_frame(scene, cam, w, h, 1.0, buffer).map(|(ms, _)| ms)
 }
 
+#[cfg(test)]
 fn render_transition(
     transition: &WorldTransition,
     w: u32,
     h: u32,
     output: &mut [u32],
-    from_buffer: &mut [u32],
-    to_buffer: &mut [u32],
+    _from_buffer: &mut [u32],
+    _to_buffer: &mut [u32],
 ) -> io::Result<u128> {
-    // Include scene/BVH reconstruction in transition performance measurements.
-    let started = Instant::now();
-    let mut from_scene = scene_with_charge(transition.from, transition.moon_fill);
-    let mut to_scene = scene_with_charge(transition.to, transition.moon_fill);
-    from_scene.lights[0].0 = transition.from_light;
-    to_scene.lights[0].0 = transition.to_light;
-    let from_camera = transition.from_camera;
-    let to_camera = default_camera(transition.to);
-    let t = transition.eased_progress();
-    from_scene.yaw = transition.from_yaw * (1.0 - t);
-    let lift = if transition.from == 0 { 6. * t * t } else { 0. };
-    if transition.from == 0 && t > 0. {
-        for cube in &mut from_scene.cubes {
-            if cube.ship {
-                cube.min.y += lift;
-                cube.max.y += lift;
-            }
-        }
-        for x in [-1.22, 1.22] {
-            cube(
-                &mut from_scene.cubes,
-                V::new(x, lift + 0.35 - t * 0.5, -2.62),
-                V::new(0.3, t * 1.5, 0.3),
-                Kind::Star,
-            );
-        }
-        from_scene.bvh = build_bvh(&mut from_scene.cubes);
-    } else if transition.from == 1 {
-        for cube in &mut from_scene.cubes {
-            if cube.material.kind == Kind::Star {
-                cube.material.emission = cube.material.emission * (1. + 8. * t * (1. - t));
-            }
-        }
-    }
-    let (exit_anchor, exit_distance, exit_elevation) = match transition.from {
-        0 => (V::new(0., 3.4 + lift, 0.), 4.5, 0.35),
-        1 => (worlds::GALAXY_EXIT, 0.85, 0.25),
-        _ => (worlds::CASTLE_EXIT, 0.60, 1.35),
-    };
-    let source_camera = Camera {
-        target: from_camera.target.lerp(ry(exit_anchor, from_scene.yaw), t),
-        distance: from_camera.distance * (1. - t) + exit_distance * t,
-        az: from_camera.az,
-        el: from_camera.el * (1. - t) + exit_elevation * t,
-    };
-    // Arrive from above the destination and settle into its default orbit.
-    let entry_camera = Camera {
-        target: to_camera.target + V::new(0., 1.2 * (1. - t), 0.),
-        distance: to_camera.distance + 4. * (1. - t),
-        az: to_camera.az + 0.25 * (1. - t),
-        el: to_camera.el + 0.25 * (1. - t),
-    };
-    render_world(&from_scene, &source_camera, w, h, from_buffer)?;
-    render_world(&to_scene, &entry_camera, w, h, to_buffer)?;
-    composite_transition(from_buffer, to_buffer, t, output);
-    Ok(started.elapsed().as_millis())
+    transitions::Renderer::new(transition).render(transition, w, h, output)
 }
-
 fn render_frame(
     scene: &Scene,
     cam: &Camera,
@@ -2112,20 +2058,12 @@ fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Resul
     transition.moon_fill = benchmark_scene.moon_fill;
     transition.from_light = benchmark_scene.lights[0].0;
     let mut transition_output = vec![0; (w * h) as usize];
-    let mut transition_from = vec![0; (w * h) as usize];
-    let mut transition_to = vec![0; (w * h) as usize];
     let transition_started = Instant::now();
+    let mut prepared = transitions::Renderer::new(&transition);
     let mut transition_frames = 0;
     while !transition.finished() {
         transition.advance(1000 / 12);
-        render_transition(
-            &transition,
-            w,
-            h,
-            &mut transition_output,
-            &mut transition_from,
-            &mut transition_to,
-        )?;
+        prepared.render(&transition, w, h, &mut transition_output)?;
         transition_frames += 1;
     }
     let transition_fps = transition_frames as f64 / transition_started.elapsed().as_secs_f64();
@@ -2143,27 +2081,22 @@ fn benchmark(benchmark_scene: &Scene, cam: &Camera, w: u32, h: u32) -> io::Resul
 
 fn transition_demo(dir: &Path, w: u32, h: u32) -> io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    let mut manifest = String::from("{\n  \"duration_seconds\": 0.8,\n  \"input_during_transition\": \"ignored\",\n  \"frames\": [\n");
+    let mut manifest = String::from("{\n  \"duration_seconds\": 0.8,\n  \"input_during_transition\": \"ignored\",\n  \"prepared_scenes\": true,\n  \"minimum_resolution_scale\": 0.5,\n  \"frames\": [\n");
     let mut first = true;
     let mut frame_no = 0;
     let mut timings = Vec::new();
+    let mut preparation_ms = 0;
     for (from, to) in [(0, 1), (1, 2), (2, 0)] {
         let mut transition = WorldTransition::new(from, to);
         let mut output = vec![0; (w * h) as usize];
-        let mut from_buffer = vec![0; (w * h) as usize];
-        let mut to_buffer = vec![0; (w * h) as usize];
+        let preparation_started = Instant::now();
+        let mut prepared = transitions::Renderer::new(&transition);
+        preparation_ms += preparation_started.elapsed().as_millis();
         let mut phase_hashes = Vec::new();
         for elapsed in [0, 200, 400, 600, 800] {
             transition.elapsed_ms = elapsed;
             let started = Instant::now();
-            render_transition(
-                &transition,
-                w,
-                h,
-                &mut output,
-                &mut from_buffer,
-                &mut to_buffer,
-            )?;
+            prepared.render(&transition, w, h, &mut output)?;
             let ms = started.elapsed().as_millis();
             let hash = framebuffer_hash(&output);
             phase_hashes.push(hash);
@@ -2174,8 +2107,9 @@ fn transition_demo(dir: &Path, w: u32, h: u32) -> io::Result<()> {
                 manifest.push_str(",\n");
             }
             first = false;
+            let (rw, rh) = transitions::resolution(w, h, transition.progress());
             manifest.push_str(&format!(
-                "    {{\"file\":\"{name}\",\"from\":\"{}\",\"to\":\"{}\",\"elapsed_ms\":{elapsed},\"render_ms\":{ms},\"hash\":\"{hash:016x}\"}}",
+                "    {{\"file\":\"{name}\",\"from\":\"{}\",\"to\":\"{}\",\"elapsed_ms\":{elapsed},\"internal_resolution\":[{rw},{rh}],\"render_ms\":{ms},\"hash\":\"{hash:016x}\"}}",
                 scene(from).name,
                 scene(to).name
             ));
@@ -2184,7 +2118,7 @@ fn transition_demo(dir: &Path, w: u32, h: u32) -> io::Result<()> {
         }
         assert!(phase_hashes.windows(2).all(|pair| pair[0] != pair[1]));
     }
-    let total_ms: u128 = timings.iter().sum();
+    let total_ms: u128 = timings.iter().sum::<u128>() + preparation_ms;
     let fps = frame_no as f64 / (total_ms.max(1) as f64 / 1000.0);
     manifest.push_str(&format!(
         "\n  ],\n  \"hashes_distinct_within_each_transition\": true,\n  \"fps\": {:.2},\n  \"final_world\": \"Mario Odyssey\"\n}}\n",
@@ -2351,6 +2285,20 @@ fn main() -> io::Result<()> {
         );
         return Ok(());
     }
+    let default_audio = Path::new("assets/audio");
+    if audio_dir.is_none()
+        && audio::FILES
+            .iter()
+            .all(|name| default_audio.join(name).is_file())
+    {
+        audio_dir = Some(default_audio.to_string_lossy().into_owned());
+    } else if audio_dir.is_none()
+        && audio::FILES
+            .iter()
+            .any(|name| default_audio.join(name).is_file())
+    {
+        eprintln!("Audio: assets/audio está incompleto; coloca los seis WAV indicados en su README. Se usarán ambientes originales.");
+    }
     if audio_demo {
         return audio::demo(audio_dir.as_deref().map(Path::new));
     }
@@ -2410,7 +2358,7 @@ fn main() -> io::Result<()> {
     let mut buffer = vec![0; (w * h) as usize];
     let mut presentation = Vec::new();
     let mut presented_size = (0, 0);
-    let mut transition_buffers = (vec![0; (w * h) as usize], vec![0; (w * h) as usize]);
+    let mut prepared_transition = None;
     let mut transition = None;
     let mut transition_started = Instant::now();
     let mut dirty = true;
@@ -2519,6 +2467,7 @@ fn main() -> io::Result<()> {
                     active.moon_fill = moons.fill;
                     active.from_light = s.lights[0].0;
                     active.to_light = rig.position(next_id);
+                    prepared_transition = Some(transitions::Renderer::new(&active));
                     sound.transition(id);
                     transition = Some(active);
                     transition_started = Instant::now();
@@ -2532,14 +2481,10 @@ fn main() -> io::Result<()> {
                 .elapsed()
                 .as_millis()
                 .min(u128::from(active.duration_ms)) as u32;
-            render_transition(
-                &active,
-                w,
-                h,
-                &mut buffer,
-                &mut transition_buffers.0,
-                &mut transition_buffers.1,
-            )?;
+            prepared_transition
+                .as_mut()
+                .expect("active transition must be prepared")
+                .render(&active, w, h, &mut buffer)?;
             presented_size = present_frame(
                 &mut window,
                 &buffer,
@@ -2551,12 +2496,15 @@ fn main() -> io::Result<()> {
             if active.finished() {
                 id = active.to;
                 sound.arrive(id);
-                s = scene_with_charge(id, active.moon_fill);
-                rig.apply(&mut s);
+                s = prepared_transition
+                    .take()
+                    .expect("completed transition must be prepared")
+                    .into_destination();
                 cam = default_camera(id);
                 window.set_title(&inspection_title(&s, None));
                 dirty = true;
                 transition = None;
+                prepared_transition = None;
             } else {
                 transition = Some(active);
             }

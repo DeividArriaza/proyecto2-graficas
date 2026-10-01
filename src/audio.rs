@@ -173,6 +173,7 @@ impl Audio {
                     ));
                 }
             }
+            eprintln!("Audio: usando WAV propios de {}", dir.display());
             dir.to_path_buf()
         } else {
             let stamp = SystemTime::now()
