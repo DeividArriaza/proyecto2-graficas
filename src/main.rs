@@ -629,7 +629,7 @@ fn scene(id: usize) -> Scene {
                 );
             }
 
-            // The top globe/chimney remains a small stepped voxel ornament.
+            // Dark pedestal for the Power Moon globe.
             cube(
                 &mut c,
                 V::new(0., 3.83, -0.18),
@@ -638,25 +638,60 @@ fn scene(id: usize) -> Scene {
             );
             cube(
                 &mut c,
-                V::new(0., 4.15, -0.18),
-                V::new(0.90, 0.42, 0.82),
-                Kind::Cloud,
-            );
-            cube(
-                &mut c,
-                V::new(0., 4.48, -0.18),
-                V::new(0.62, 0.30, 0.58),
-                Kind::Star,
-            );
-            cube(
-                &mut c,
-                V::new(0., 4.72, -0.18),
-                V::new(0.26, 0.22, 0.26),
+                V::new(0., 4.08, -0.18),
+                V::new(0.42, 0.28, 0.42),
                 Kind::Metal,
             );
+
+            // Stepped voxel sphere where the Odyssey stores Power Moons. Small
+            // gaps between the cubes keep its block construction visible.
+            let globe_center = V::new(0., 4.82, -0.18);
+            let globe_cell = 0.25;
+            let globe_step = 0.28;
+            for (layer, cells) in [
+                (0, &[(0, 0)][..]),
+                (1, &[(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)][..]),
+                (
+                    2,
+                    &[
+                        (-1, -1),
+                        (-1, 0),
+                        (-1, 1),
+                        (0, -1),
+                        (0, 0),
+                        (0, 1),
+                        (1, -1),
+                        (1, 0),
+                        (1, 1),
+                    ][..],
+                ),
+                (3, &[(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)][..]),
+                (4, &[(0, 0)][..]),
+            ] {
+                for &(x, z) in cells {
+                    cube(
+                        &mut c,
+                        V::new(
+                            globe_center.x + x as f32 * globe_step,
+                            globe_center.y + (layer as f32 - 2.) * globe_step,
+                            globe_center.z + z as f32 * globe_step,
+                        ),
+                        V::new(globe_cell, globe_cell, globe_cell),
+                        Kind::Star,
+                    );
+                }
+            }
+
+            // Black cap and golden finial from the reference ship.
             cube(
                 &mut c,
-                V::new(0., 4.93, -0.18),
+                V::new(0., 5.48, -0.18),
+                V::new(0.34, 0.16, 0.34),
+                Kind::Dark,
+            );
+            cube(
+                &mut c,
+                V::new(0., 5.65, -0.18),
                 V::new(0.16, 0.16, 0.16),
                 Kind::Star,
             );
@@ -1669,11 +1704,19 @@ mod tests {
     #[test]
     fn odyssey_is_a_cube_dominant_voxel_ship() {
         let odyssey = scene(0);
-        assert!(odyssey.cubes.len() >= 45);
+        assert!(odyssey.cubes.len() >= 65);
         assert!(odyssey.spheres.is_empty());
         // The tall cabin and the forward headlight both extend above/forward of the hull.
-        assert!(odyssey.cubes.iter().any(|cube| cube.max.y > 4.8));
+        assert!(odyssey.cubes.iter().any(|cube| cube.max.y > 5.7));
         assert!(odyssey.cubes.iter().any(|cube| cube.max.z > 3.1));
+        assert!(
+            odyssey
+                .cubes
+                .iter()
+                .filter(|cube| cube.min.y > 4.15 && cube.material.kind == Kind::Star)
+                .count()
+                >= 21
+        );
     }
     #[test]
     fn refraction_material_is_present() {
