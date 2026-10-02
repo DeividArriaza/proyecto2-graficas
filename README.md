@@ -1,6 +1,7 @@
 # Proyecto 2 — Dioramas con raytracing
 
 Renderer de CPU en Rust para tres dioramas: Mario Odyssey, Mario Galaxy y Super Mario 64. Los tres modelos actuales se construyen exclusivamente con cubos/AABB texturizados. Conserva UV por cara, sombras, reflexión, refracción, emisión y skyboxes por escena.
+Video de youtube: https://youtu.be/Jv6zhgX8zt4 
 
 ## Ejecutar
 
