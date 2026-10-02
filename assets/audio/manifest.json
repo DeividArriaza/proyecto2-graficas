@@ -1,0 +1,15 @@
+{
+  "source": "WAV files supplied for project evaluation; original files preserved",
+  "automatic_directory": "assets/audio",
+  "transition_seconds": 0.8,
+  "effects_stop_on_arrival": true,
+  "total_bytes": 99469116,
+  "tracks": [
+    {"file": "odyssey.wav", "bytes": 43827278, "seconds": 248.453515, "sample_rate": 44100, "channels": 2, "bits": 16, "sha256": "b697c843b9145b67d697c22c4543c3098b737415199da4e786098fbd07135f1a"},
+    {"file": "galaxy.wav", "bytes": 14901326, "seconds": 84.474195, "sample_rate": 44100, "channels": 2, "bits": 16, "sha256": "ba8c66cf567cd8b2efc743e07a992dcb2e88afca02f888cb1b035b653e8b818e"},
+    {"file": "mario64.wav", "bytes": 37777486, "seconds": 214.157642, "sample_rate": 44100, "channels": 2, "bits": 16, "sha256": "17dd615ce140c0618cfa95e4403fd5f4b8a9caee0b475e381bb598d310d0e02f"},
+    {"file": "odyssey-transition.wav", "bytes": 1421390, "seconds": 8.057324, "sample_rate": 44100, "channels": 2, "bits": 16, "sha256": "4cd615fb4fd8b3c016cc57cd518154c10a1141b554403bcc8b1385614b356ec5"},
+    {"file": "galaxy-transition.wav", "bytes": 628150, "seconds": 3.560385, "sample_rate": 44100, "channels": 2, "bits": 16, "sha256": "d226e9c19d4260a92b3f08594a35295e393f8322b3dc79bfde6f5ee8dac8451c"},
+    {"file": "mario64-transition.wav", "bytes": 913486, "seconds": 5.17805, "sample_rate": 44100, "channels": 2, "bits": 16, "sha256": "cf30078efc106aafe57a3de1c18cc4ca5b7c2e6b3841d10b2e0b5903588c2824"}
+  ]
+}

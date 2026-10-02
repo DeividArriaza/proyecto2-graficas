@@ -1,6 +1,6 @@
 # Audios propios
 
-Colocá aquí seis archivos WAV con estos nombres exactos, en minúsculas:
+Los seis WAV de entrega están incluidos en el repositorio con estos nombres exactos:
 
 | Mundo | Música/ambiente repetido | Efecto al salir del mundo |
 | --- | --- | --- |
@@ -30,6 +30,8 @@ También podés guardar los archivos fuera del repositorio:
 cargo run --release -- --audio-dir /ruta/a/mis/audios
 ```
 
-La aplicación nunca modifica ni borra tus audios. Los WAV están ignorados por Git
-para evitar subir grabaciones grandes o sin permiso; copiarlos aquí no los publica.
-No se incluyen canciones originales de Nintendo en el proyecto.
+La aplicación nunca modifica ni borra tus audios. Estos seis archivos aportados
+para la evaluación se versionan mediante excepciones específicas en `.gitignore`;
+los demás WAV y temporales siguen ignorados. Al clonar no hace falta descargarlos
+por separado ni usar Git LFS. Sus tamaños, duraciones y hashes SHA-256 están en
+`manifest.json`. El código de síntesis original se conserva como respaldo.

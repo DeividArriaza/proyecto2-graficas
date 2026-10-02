@@ -9,9 +9,12 @@ con rostro/gorra-jardín de Mario y el castillo de Peach con techos rojos, puent
 y jardines. Los modelos están en `src/worlds.rs`; los tres mundos activos usan sólo
 cubos/AABB, manteniendo Launch Star y tubería como anclajes de viaje.
 
-`src/audio.rs` sintetiza tres ambientes originales y tres efectos de 0.8 s; `B`
-silencia/reactiva. No se incluyen las canciones de Nintendo: se cargan WAV propios
-con `--audio-dir` (nombres en README). `--export-audio` exporta las pistas originales
+Los seis WAV aportados por el usuario para evaluación ya se incluyen en
+`assets/audio/`, con excepciones específicas en `.gitignore` y hashes SHA-256 en
+su manifest. Al clonar se detectan automáticamente desde la raíz, sin Git LFS.
+`src/audio.rs` sintetiza tres ambientes originales y tres efectos de 0.8 s como
+respaldo; `B` silencia/reactiva. También se cargan WAV propios
+con `--audio-dir` (nombres en README). `--export-audio` exporta las pistas sintetizadas
 sin sobrescribir archivos existentes; `--audio-demo` comprueba el ciclo sonoro.
 La reproducción usa `pw-play` o `aplay` del sistema, sin nuevas dependencias Cargo;
 si falla el dispositivo, el render continúa sin sonido. Headless y benchmarks no

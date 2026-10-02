@@ -136,10 +136,12 @@ agua del oasis. Se pueden recorrer con `Tab/T` y exportar con `--inspect-materia
 
 ## Música y efectos por mundo
 
-El modo interactivo reproduce audio por defecto. Se sintetizan en Rust tres
+El modo interactivo reproduce por defecto los seis WAV aportados para la entrega,
+incluidos en `assets/audio/` y disponibles al clonar el repositorio. Si faltan,
+se sintetizan en Rust tres
 ambientes originales diferentes de 12 segundos que se repiten: uno rítmico para
 Odyssey, otro más etéreo para Galaxy y otro alegre para Mario 64. **No son las
-canciones originales de Nintendo**. No había audios en las referencias subidas.
+canciones originales de Nintendo**: son únicamente el respaldo del proyecto.
 
 Al iniciar un viaje se detiene la música origen y se dispara su efecto de 0.8 s:
 ascenso de motor, brillo de Launch Star o descenso de tubería. Al llegar comienza
@@ -171,8 +173,9 @@ También podés usar otra carpeta mediante `--audio-dir /ruta/a/mis/audios`.
 Formato recomendado: WAV PCM de 16 bits, mono o estéreo, a 22050/44100/48000 Hz.
 Las músicas se repiten y los efectos deberían durar aproximadamente 0.8 s, pues
 se detienen al llegar. El efecto corresponde al mundo del que salís.
-No basta con renombrar un MP3: hay que convertirlo a WAV. Los WAV están ignorados
-por Git; copiarlos aquí no los publica en GitHub.
+No basta con renombrar un MP3: hay que convertirlo a WAV. Los seis WAV de entrega
+sí se versionan; los demás WAV siguen ignorados. Sus hashes y duraciones están en
+[`assets/audio/manifest.json`](assets/audio/manifest.json).
 
 Podés exportar primero los seis audios originales y reemplazar únicamente las pistas
 que quieras con grabaciones que tengas permiso de usar. El exportador rechaza destinos

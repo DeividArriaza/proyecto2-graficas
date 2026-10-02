@@ -1,3 +1,9 @@
 /target/
 *.ppm
 *.wav
+!/assets/audio/odyssey.wav
+!/assets/audio/galaxy.wav
+!/assets/audio/mario64.wav
+!/assets/audio/odyssey-transition.wav
+!/assets/audio/galaxy-transition.wav
+!/assets/audio/mario64-transition.wav
