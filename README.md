@@ -22,6 +22,7 @@ Controles:
 | `R` mantenida | Rotar el diorama continuamente |
 | `M` | Activar/desactivar inspección de materiales |
 | `Tab` / `T` | Abrir la inspección directamente o recorrer los materiales presentes |
+| `V` | Ocultar/mostrar todo el panel informativo con la misma tecla |
 | `J` / `L` mantenidas | Cambiar el ángulo horizontal de la luz principal |
 | `I` / `K` mantenidas | Subir/bajar el ángulo de la luz principal |
 | `H` | Restablecer la iluminación original del mundo |
@@ -53,13 +54,13 @@ Los nuevos modelos están en `src/worlds.rs`; la síntesis y gestión de sonido,
 
 Cinco materiales que pueden mostrarse durante la presentación:
 
-| Nombre en el inspector | Textura propia | Albedo RGB | Specular | Transparencia | Reflectividad |
+| Nombre en el inspector (ID de exportación) | Textura propia | Albedo RGB | Especular | Transparencia | Reflectividad |
 | --- | --- | --- | ---: | ---: | ---: |
-| `sand` | Granos y ondulaciones de arena rojiza | 0.89, 0.29, 0.12 | 0.04 | 0.00 | 0.00 |
-| `stucco-teal` | Estuco granular turquesa de las casas | 0.02, 0.58, 0.51 | 0.10 | 0.00 | 0.00 |
-| `brick` | Patrón rojo con juntas escalonadas | 0.82, 0.07, 0.03 | 0.18 | 0.00 | 0.04 |
-| `metal` | Paneles con variación de acabado | 0.78, 0.82, 0.90 | 0.70 | 0.00 | 0.34 |
-| `water` | Ondas procedurales | 0.08, 0.35, 0.52 | 0.85 | 0.62 | 0.16 |
+| Arena (`sand`) | Granos y ondulaciones de arena rojiza | 0.89, 0.29, 0.12 | 0.04 | 0.00 | 0.00 |
+| Estuco turquesa (`stucco-teal`) | Estuco granular turquesa de las casas | 0.02, 0.58, 0.51 | 0.10 | 0.00 | 0.00 |
+| Ladrillo (`brick`) | Patrón rojo con juntas escalonadas | 0.82, 0.07, 0.03 | 0.18 | 0.00 | 0.04 |
+| Metal (`metal`) | Paneles con variación de acabado | 0.78, 0.82, 0.90 | 0.70 | 0.00 | 0.34 |
+| Agua (`water`) | Ondas procedurales | 0.08, 0.35, 0.52 | 0.85 | 0.62 | 0.16 |
 
 El oasis usa agua refractiva con IOR 1.33, Fresnel de Schlick y reflexión interna total.
 Su fondo tiene baldosas contrastantes para observar la transmisión/distorsión en el
@@ -77,6 +78,20 @@ resto de la escena se muestra gris. Antes `Tab` requería activar `M`: ahora `Ta
 El nombre, índice y los cuatro parámetros aparecen en un panel dentro de la ventana,
 además del título y la terminal. `M` sale de la inspección. Rotación y zoom siguen disponibles; iniciar una transición sale de
 la inspección y vuelve al render normal de los tres mundos.
+
+Los 23 nombres de materiales se muestran en español en el panel, título y terminal
+(por ejemplo, Césped, Tubería, Mampostería y Agua del lago). Los identificadores
+de `--inspect-material` permanecen en inglés para conservar los comandos existentes.
+`V` oculta todo el panel sin alterar cámara, luces, sonido, material seleccionado
+ni modo de inspección; otra pulsación de `V` lo muestra de nuevo. La elección se
+mantiene al cambiar de mundo y la tecla también funciona durante las transiciones.
+Para volver al render normal, seguí usando `M`. Para grabar sin el panel desde el inicio:
+
+```bash
+cargo run --release -- --hide-hud
+```
+
+En headless, `--hide-hud` anula `--hud`, permitiendo capturas limpias.
 
 La inspección también se puede exportar sin ventana:
 
@@ -293,7 +308,7 @@ Cada benchmark mide ahora la transición que sale del mundo elegido, conservando
 cámara orbital final e incluyendo la preparación única de escenas/BVH, los renders
 adaptativos y el escalado, no sólo el trazado.
 Los FPS son promedios de la secuencia, no un mínimo por frame; varían según el equipo.
-Las 25 pruebas incluyen la continuidad del primer y último
+Las 27 pruebas incluyen la continuidad del primer y último
 frame para las seis combinaciones de mundos, después de orbitar y rotar la escena.
 La BVH se verifica comparando impactos y sombras contra la búsqueda lineal en los
 tres mundos rotados. También se prueba que la inspección distingue materiales y
@@ -305,6 +320,8 @@ limpieza de temporales propios sin sobrescribir archivos existentes.
 También se comprueba la resolución adaptativa, la recuperación de calidad en los
 extremos y la igualdad de la BVH actualizada respecto a una reconstruida, sin
 acumulación de movimiento/emisión ni crecimiento de geometría durante el viaje.
+Se verifican también las etiquetas españolas, los glifos con acentos y que ocultar
+el panel deja intacta la imagen, sin una franja negra residual.
 
 La pasada visual v3 en release a 320×240 midió 235.29 FPS (Odyssey), 285.71 FPS
 (Galaxy) y 17.12 FPS (NSMB Wii), con 11 de 11 cambios de framebuffer durante la
@@ -342,8 +359,8 @@ mantener al menos 10 FPS en órbita; la transición mide por separado sus dos re
 frame. No se declara una ventana real validada cuando no hay display/Xvfb disponible.
 
 Las capturas actuales están en `artifacts/final/`, con hashes y mediciones en su
-`manifest.json`. El GIF anterior es histórico; el video de demostración actualizado
-sigue pendiente. No se generan estos archivos automáticamente al abrir la ventana.
+`manifest.json`. El GIF anterior es histórico; el video de demostración está
+enlazado al principio de este README. No se generan estos archivos automáticamente al abrir la ventana.
 
 ![Odyssey en el Reino de las Arenas](artifacts/final/odyssey.png)
 

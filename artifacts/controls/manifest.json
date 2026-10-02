@@ -8,19 +8,20 @@
   "moon_animation_seconds": 0.5,
   "transition_seconds": 0.8,
   "frames": [
-    {"file": "moons-empty.png", "moons": 0, "hash": "32079c45ad907965", "render_ms": 54},
-    {"file": "moons-full.png", "moons": 20, "hash": "48431bba21cd7696", "render_ms": 56},
-    {"file": "material-hud.png", "material": "water", "moons": 10, "hash": "f86bda637db792f4", "render_ms": 18},
-    {"file": "light-side.png", "moons": 10, "light_azimuth_offset_degrees": 70, "light_elevation_offset_degrees": -10, "hash": "3669846e99d2b0eb", "render_ms": 55}
+    {"file": "moons-empty.png", "moons": 0, "hash": "aaa1f6be706fe1e5", "render_ms": 56},
+    {"file": "moons-full.png", "moons": 20, "hash": "a0d7e894f6442216", "render_ms": 60},
+    {"file": "material-hud.png", "material": "water", "display_label": "Agua", "moons": 10, "hash": "ae59d525c257d139", "render_ms": 18},
+    {"file": "light-side.png", "moons": 10, "light_azimuth_offset_degrees": 70, "light_elevation_offset_degrees": -10, "hash": "d8d03c42210f386b", "render_ms": 54}
   ],
   "verification": {
-    "unit_tests_passed": 20,
+    "unit_tests_passed": 27,
     "fmt_check": "passed",
     "cargo_check": "passed",
     "clippy_all_targets_all_features_deny_warnings": "passed",
     "release_build": "passed",
-    "window_startup_seconds": 5,
-    "window_timeout_exit_code": 124,
+    "hidden_hud_matches_normal_headless_hash": "73830c551fd6e9a6",
+    "window_smoke_ticks": 30,
+    "window_exit_code": 0,
     "manual_keyboard_check": "not performed"
   }
 }

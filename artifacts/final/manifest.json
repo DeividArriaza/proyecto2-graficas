@@ -20,5 +20,5 @@
   "previous_mario64_transition_fps": 11.69,
   "references": ["Mario_Galaxy2.png", "Mario64.png"],
   "historical_frame": "nsmb-wii.png is retained as history, not the active third world",
-  "unit_tests_passed": 25
+  "unit_tests_passed": 27
 }

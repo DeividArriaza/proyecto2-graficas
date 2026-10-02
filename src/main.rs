@@ -167,6 +167,34 @@ const MATERIALS: [Kind; 23] = [
     Kind::LakeWater,
 ];
 impl Kind {
+    /// Spanish display labels; CLI identifiers remain stable for existing exports.
+    fn label_es(self) -> &'static str {
+        match self {
+            Self::Grass => "Césped",
+            Self::Planet => "Planeta",
+            Self::Brick => "Ladrillo",
+            Self::Pipe => "Tubería",
+            Self::Metal => "Metal",
+            Self::Cloud => "Nube",
+            Self::Dark => "Oscuro",
+            Self::Water => "Agua",
+            Self::Star => "Estrella",
+            Self::Stone => "Piedra",
+            Self::Sand => "Arena",
+            Self::Sandstone => "Arenisca",
+            Self::Cactus => "Cactus",
+            Self::StuccoTeal => "Estuco turquesa",
+            Self::StuccoYellow => "Estuco amarillo",
+            Self::StuccoMagenta => "Estuco magenta",
+            Self::Skin => "Piel",
+            Self::Castle => "Mampostería",
+            Self::Roof => "Tejado",
+            Self::Path => "Camino",
+            Self::Bark => "Corteza",
+            Self::LakeBed => "Fondo del lago",
+            Self::LakeWater => "Agua del lago",
+        }
+    }
     fn name(self) -> &'static str {
         match self {
             Self::Grass => "grass",
@@ -1674,11 +1702,11 @@ fn scene_materials(scene: &Scene) -> Vec<Kind> {
 fn inspection_title(scene: &Scene, selected: Option<Kind>) -> String {
     if let Some(kind) = selected {
         let m = mat(kind);
-        format!("{} | {} | albedo={:.2},{:.2},{:.2} spec={:.2} transparencia={:.2} reflejo={:.2} | Tab: siguiente, M: salir",
-            scene.name, kind.name(), m.albedo.x, m.albedo.y, m.albedo.z, m.specular, m.transparency, m.reflect)
+        format!("{} | {} | albedo={:.2},{:.2},{:.2} especular={:.2} transparencia={:.2} reflectividad={:.2} | Tab/T: siguiente, M: salir, V: panel",
+            scene.name, kind.label_es(), m.albedo.x, m.albedo.y, m.albedo.z, m.specular, m.transparency, m.reflect)
     } else {
         format!(
-            "{} | M: inspeccionar materiales | N: siguiente mundo",
+            "{} | M: inspeccionar materiales | N: siguiente mundo | V: mostrar/ocultar panel",
             scene.name
         )
     }
@@ -1702,7 +1730,10 @@ fn hud_lines(
     rig: LightRig,
     transition: Option<&WorldTransition>,
 ) -> Vec<String> {
-    let mut lines = vec![format!("{} | 1/2/3 N:ESCENA M:MATERIALES", scene.name)];
+    let mut lines = vec![format!(
+        "{} | 1/2/3 N:ESCENA M:MATERIALES V:PANEL",
+        scene.name
+    )];
     if let Some(transition) = transition {
         let motif = match transition.from {
             0 => "DESPEGUE ODYSSEY",
@@ -1719,11 +1750,15 @@ fn hud_lines(
         lines.push(format!(
             "MATERIAL {index}/{}: {} | TAB/T:SIGUIENTE M:SALIR",
             kinds.len(),
-            kind.name()
+            kind.label_es()
         ));
         lines.push(format!(
-            "ALBEDO {:.2},{:.2},{:.2} SPEC {:.2} TRANSP {:.2} REFLEJO {:.2}",
-            m.albedo.x, m.albedo.y, m.albedo.z, m.specular, m.transparency, m.reflect
+            "ALBEDO {:.2},{:.2},{:.2} ESPECULAR {:.2}",
+            m.albedo.x, m.albedo.y, m.albedo.z, m.specular
+        ));
+        lines.push(format!(
+            "TRANSPARENCIA {:.2} REFLECTIVIDAD {:.2}",
+            m.transparency, m.reflect
         ));
         lines.push("DIAGNOSTICO: M PARA VER LUZ Y REFLEXION".into());
     } else {
@@ -1746,7 +1781,22 @@ fn hud_lines(
 
 // Original compact bitmap alphabet for the on-screen controls and material label.
 fn glyph(c: char) -> [u8; 7] {
-    match c.to_ascii_uppercase() {
+    let c = match c {
+        'á' | 'Á' => 'Á',
+        'é' | 'É' => 'É',
+        'í' | 'Í' => 'Í',
+        'ó' | 'Ó' => 'Ó',
+        'ú' | 'Ú' => 'Ú',
+        'ñ' | 'Ñ' => 'Ñ',
+        c => c.to_ascii_uppercase(),
+    };
+    match c {
+        'Á' => [2, 4, 14, 17, 31, 17, 17],
+        'É' => [2, 4, 31, 16, 30, 16, 31],
+        'Í' => [2, 4, 14, 4, 4, 4, 14],
+        'Ó' => [2, 4, 14, 17, 17, 17, 14],
+        'Ú' => [2, 4, 17, 17, 17, 17, 14],
+        'Ñ' => [10, 0, 17, 25, 21, 19, 17],
         'A' => [14, 17, 17, 31, 17, 17, 17],
         'B' => [30, 17, 17, 30, 17, 17, 30],
         'C' => [14, 17, 16, 16, 16, 17, 14],
@@ -1796,10 +1846,14 @@ fn glyph(c: char) -> [u8; 7] {
 }
 
 fn draw_hud(buffer: &mut [u32], width: usize, height: usize, lines: &[String]) {
-    if width == 0 || height == 0 {
+    if width == 0 || height == 0 || lines.is_empty() {
         return;
     }
-    let longest = lines.iter().map(|line| line.len()).max().unwrap_or(0);
+    let longest = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
     let scale = if width >= longest * 12 + 16 { 2 } else { 1 };
     let line_height = 9 * scale;
     let top = height.saturating_sub(lines.len() * line_height + 8);
@@ -2141,6 +2195,7 @@ fn usage() {
     println!("Demo headless: cargo run -- --transition-demo DIR [--width N] [--height N]");
     println!("Inspección: --inspect-material sand|metal|water|stucco-teal (con --headless y --output, o interactivo)");
     println!("Estado: --moons 0..20 --light-azimuth GRADOS --light-elevation GRADOS; --hud incluye el panel en exportación headless.");
+    println!("Panel: V lo oculta/muestra; --hide-hud inicia sin panel (también anula --hud en headless).");
     println!("Audio: --mute, --audio-dir DIR (6 WAV propios), --export-audio DIR (síntesis original sin ventana). B silencia/activa.");
     println!("Pruebas opcionales: --audio-demo (ciclo de sonido sin ventana); --smoke-frames N (cerrar ventana normalmente tras N ticks).");
     println!("Teclas: flechas/A-D orbitar, W/S elevar, +/- zoom, R girar, M inspeccionar, Tab/T iniciar o recorrer materiales, J/L luz horizontal, I/K luz vertical, H restablecer luz, Q/E quitar/añadir energilunas, N/1/2/3 cambiar escena, Escape salir.");
@@ -2162,6 +2217,7 @@ fn main() -> io::Result<()> {
     let mut moon_count = 10;
     let mut rig = LightRig::default();
     let mut export_hud = false;
+    let mut hud_visible = true;
     let mut muted = false;
     let mut audio_dir = None;
     let mut audio_export = None;
@@ -2226,6 +2282,7 @@ fn main() -> io::Result<()> {
                 }
             }
             "--hud" => export_hud = true,
+            "--hide-hud" => hud_visible = false,
             "--mute" => muted = true,
             "--audio-demo" => audio_demo = true,
             "--smoke-frames" => {
@@ -2333,7 +2390,7 @@ fn main() -> io::Result<()> {
             h,
             Path::new(&output),
             inspection,
-            export_hud.then_some(hud.as_slice()),
+            (export_hud && hud_visible).then_some(hud.as_slice()),
         )?;
         return Ok(());
     }
@@ -2369,6 +2426,10 @@ fn main() -> io::Result<()> {
         let elapsed = now.duration_since(last_tick);
         let dt = elapsed.as_secs_f32().min(0.1);
         last_tick = now;
+        if window.is_key_pressed(Key::V, KeyRepeat::No) {
+            hud_visible = !hud_visible;
+            dirty = true;
+        }
         let previous_audio_label = sound.label();
         sound.tick();
         if window.is_key_pressed(Key::B, KeyRepeat::No) {
@@ -2476,6 +2537,9 @@ fn main() -> io::Result<()> {
         }
         let mut hud = hud_lines(&s, inspection, &moons, rig, transition.as_ref());
         hud.push(sound.label().into());
+        if !hud_visible {
+            hud.clear();
+        }
         if let Some(mut active) = transition {
             active.elapsed_ms = transition_started
                 .elapsed()
@@ -2542,6 +2606,39 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn spanish_labels_are_unique_and_accented_glyphs_are_visible() {
+        let labels: std::collections::HashSet<_> = MATERIALS.iter().map(|k| k.label_es()).collect();
+        assert_eq!(labels.len(), MATERIALS.len());
+        assert_eq!(Kind::Water.name(), "water"); // Export identifiers remain compatible.
+        assert_eq!(Kind::Water.label_es(), "Agua");
+        assert_eq!(Kind::StuccoTeal.label_es(), "Estuco turquesa");
+        assert!(inspection_title(&scene(0), Some(Kind::Water)).contains("Agua"));
+        for c in "áéíóúñÁÉÍÓÚÑ".chars() {
+            assert_ne!(glyph(c), [0; 7]);
+        }
+    }
+    #[test]
+    fn hidden_panel_leaves_image_intact_and_can_be_shown_again() {
+        let source = vec![0x35_68_9a; 32 * 24];
+        let mut shown = Vec::new();
+        let lines = hud_lines(
+            &scene(0),
+            Some(Kind::Water),
+            &MoonCharge::new(10),
+            LightRig::default(),
+            None,
+        );
+        scale_letterboxed(&source, 32, 24, &mut shown, 320, 240);
+        let clean = shown.clone();
+        draw_hud(&mut shown, 320, 240, &lines);
+        assert_ne!(shown, clean);
+        scale_letterboxed(&source, 32, 24, &mut shown, 320, 240);
+        draw_hud(&mut shown, 320, 240, &[]);
+        assert_eq!(shown, clean); // No residual black band when hidden.
+        draw_hud(&mut shown, 320, 240, &lines);
+        assert_ne!(shown, clean);
+    }
     #[test]
     fn reference_worlds_are_voxel_and_keep_their_travel_landmarks() {
         let galaxy = scene(1);
@@ -2883,7 +2980,7 @@ mod tests {
         );
         assert!(lines
             .iter()
-            .any(|line| line.contains("water") && line.contains("MATERIAL")));
+            .any(|line| line.contains("Agua") && line.contains("MATERIAL")));
         let mut pixels = vec![0; 640 * 480];
         draw_hud(&mut pixels, 640, 480, &lines);
         assert!(pixels.contains(&0xff_e1_98));
